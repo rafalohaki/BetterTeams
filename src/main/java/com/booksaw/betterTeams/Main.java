@@ -386,7 +386,7 @@ public class Main extends JavaPlugin {
 
 				teamManagement = new MCTeamManagement(type);
 
-				Bukkit.getScheduler().runTaskAsynchronously(this, () -> teamManagement.displayBelowNameForAll());
+                                Bukkit.getScheduler().runTask(this, () -> teamManagement.displayBelowNameForAll());
 				getServer().getPluginManager().registerEvents(teamManagement, this);
 				Main.plugin.getLogger().info("teamManagement declared: " + teamManagement);
 			}

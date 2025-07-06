@@ -37,14 +37,24 @@ public class MCTeamManagement implements Listener {
 
 	}
 
-	public void displayBelowNameForAll() {
-		for (Player p : Bukkit.getOnlinePlayers()) {
-			displayBelowName(p);
-		}
-	}
+        public void displayBelowNameForAll() {
+                if (!Bukkit.isPrimaryThread()) {
+                        Bukkit.getScheduler().runTask(Main.plugin, this::displayBelowNameForAll);
+                        return;
+                }
 
-	public void displayBelowName(Player player) {
-		player.setScoreboard(board);
+                for (Player p : Bukkit.getOnlinePlayers()) {
+                        displayBelowName(p);
+                }
+        }
+
+        public void displayBelowName(Player player) {
+                if (!Bukkit.isPrimaryThread()) {
+                        Bukkit.getScheduler().runTask(Main.plugin, () -> displayBelowName(player));
+                        return;
+                }
+
+                player.setScoreboard(board);
 
 		Team team = Team.getTeam(player);
 		if (team == null) {
@@ -131,9 +141,9 @@ public class MCTeamManagement implements Listener {
 	}
 
 	@EventHandler
-	public void playerJoinEvent(PlayerJoinEvent e) {
-		Bukkit.getScheduler().runTaskAsynchronously(Main.plugin, () -> displayBelowName(e.getPlayer()));
-	}
+        public void playerJoinEvent(PlayerJoinEvent e) {
+                Bukkit.getScheduler().runTask(Main.plugin, () -> displayBelowName(e.getPlayer()));
+        }
 
 	public void setupTeam(org.bukkit.scoreboard.Team team, String teamName) {
 		// setting team name
