@@ -1,5 +1,6 @@
 package com.booksaw.betterTeams.commands.team;
 
+import java.util.List;
 import com.booksaw.betterTeams.CommandResponse;
 import com.booksaw.betterTeams.Main;
 import com.booksaw.betterTeams.Team;
@@ -8,8 +9,6 @@ import com.booksaw.betterTeams.message.MessageManager;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.scheduler.BukkitRunnable;
-
-import java.util.List;
 
 public class TopCommand extends SubCommand {
 
@@ -22,26 +21,37 @@ public class TopCommand extends SubCommand {
 			teamPre = Team.getTeam((Player) sender);
 		}
 
-		Team team = teamPre;
+		final Team team = teamPre;
 
 		MessageManager.sendMessage(sender, "loading");
+
+		// Guard against scheduling a task if the plugin is not in a safe state.
+		if (!Main.isPluginSafe()) {
+			return new CommandResponse(true);
+		}
 
 		new BukkitRunnable() {
 
 			@Override
 			public void run() {
+				// Guard the async task execution in case the plugin was disabled while it was queued.
+				if (!Main.isPluginSafe()) {
+					return;
+				}
+
 				boolean contained = false;
 				String[] teams = Team.getTeamManager().sortTeamsByScore();
 				MessageManager.sendMessage(sender, "top.leaderboard");
 
 				for (int i = 0; i < 10 && i < teams.length; i++) {
 					if (teams[i] == null) {
-						Main.plugin.getLogger().severe("Team at position [" + i + "] had a null name");
+						// Guard the logger call
+						if(Main.isPluginSafe()) Main.plugin.getLogger().severe("Team at position [" + i + "] had a null name");
 						continue;
 					}
 					Team tempTeam = Team.getTeam(teams[i]);
 					sendTopSyntaxMessage(sender, i + 1, tempTeam, teams[i]);
-					if (team == tempTeam) {
+					if (team != null && team.equals(tempTeam)) {
 						contained = true;
 					}
 				}
@@ -115,14 +125,15 @@ public class TopCommand extends SubCommand {
 
 	private void sendTopSyntaxMessage(CommandSender sender, int rank, Team team, String teamIdentifier) {
 		if (team == null || team.getName() == null) {
-			Main.plugin.getLogger()
-					.warning("There is an issue with the team file associated with " + teamIdentifier);
-			Main.plugin.getLogger().warning("in config.yml set 'rebuildLookups' to true and restart your server, if the issue continues please report it to booksaw");
+			if (Main.isPluginSafe()) {
+				Main.plugin.getLogger()
+						.warning("There is an issue with the team file associated with " + teamIdentifier);
+				Main.plugin.getLogger().warning("in config.yml set 'rebuildLookups' to true and restart your server, if the issue continues please report it to booksaw");
+			}
 			return;
 		}
 
 		MessageManager.sendMessage(sender, "top.syntax", rank, team.getName(), team.getScore());
-
 	}
 
 }

@@ -1,15 +1,98 @@
+/*
+ * Main.java
+ * Fixed: ensure all scoreboard operations run on the main thread and robustly handle plugin reloads.
+ */
 package com.booksaw.betterTeams;
 
+import java.io.File;
+import java.util.Map.Entry;
+import java.util.Objects;
+import java.util.logging.Level;
 import com.booksaw.betterTeams.commands.HelpCommand;
 import com.booksaw.betterTeams.commands.ParentCommand;
 import com.booksaw.betterTeams.commands.PermissionParentCommand;
-import com.booksaw.betterTeams.commands.team.*;
+import com.booksaw.betterTeams.commands.team.AllyChatCommand;
+import com.booksaw.betterTeams.commands.team.AllyCommand;
+import com.booksaw.betterTeams.commands.team.AnchorCommand;
+import com.booksaw.betterTeams.commands.team.BalCommand;
+import com.booksaw.betterTeams.commands.team.BaltopCommand;
+import com.booksaw.betterTeams.commands.team.BanCommand;
+import com.booksaw.betterTeams.commands.team.ChatCommand;
+import com.booksaw.betterTeams.commands.team.ColorCommand;
+import com.booksaw.betterTeams.commands.team.CreateCommand;
+import com.booksaw.betterTeams.commands.team.DelHome;
+import com.booksaw.betterTeams.commands.team.DelwarpCommand;
+import com.booksaw.betterTeams.commands.team.DemoteCommand;
+import com.booksaw.betterTeams.commands.team.DepositCommand;
+import com.booksaw.betterTeams.commands.team.DescriptionCommand;
+import com.booksaw.betterTeams.commands.team.DisbandCommand;
+import com.booksaw.betterTeams.commands.team.EchestCommand;
+import com.booksaw.betterTeams.commands.team.HomeCommand;
+import com.booksaw.betterTeams.commands.team.InfoCommand;
+import com.booksaw.betterTeams.commands.team.InviteCommand;
+import com.booksaw.betterTeams.commands.team.JoinCommand;
+import com.booksaw.betterTeams.commands.team.KickCommand;
+import com.booksaw.betterTeams.commands.team.LeaveCommand;
+import com.booksaw.betterTeams.commands.team.ListCommand;
+import com.booksaw.betterTeams.commands.team.NameCommand;
+import com.booksaw.betterTeams.commands.team.NeutralCommand;
+import com.booksaw.betterTeams.commands.team.OpenCommand;
+import com.booksaw.betterTeams.commands.team.PromoteCommand;
+import com.booksaw.betterTeams.commands.team.PvpCommand;
+import com.booksaw.betterTeams.commands.team.RankCommand;
+import com.booksaw.betterTeams.commands.team.RankupCommand;
+import com.booksaw.betterTeams.commands.team.SetAnchorCommand;
+import com.booksaw.betterTeams.commands.team.SetOwnerCommand;
+import com.booksaw.betterTeams.commands.team.SetWarpCommand;
+import com.booksaw.betterTeams.commands.team.SethomeCommand;
+import com.booksaw.betterTeams.commands.team.TagCommand;
+import com.booksaw.betterTeams.commands.team.TitleCommand;
+import com.booksaw.betterTeams.commands.team.TopCommand;
+import com.booksaw.betterTeams.commands.team.UnbanCommand;
+import com.booksaw.betterTeams.commands.team.WarpCommand;
+import com.booksaw.betterTeams.commands.team.WarpsCommand;
+import com.booksaw.betterTeams.commands.team.WithdrawCommand;
 import com.booksaw.betterTeams.commands.team.chest.ChestCheckCommand;
 import com.booksaw.betterTeams.commands.team.chest.ChestClaimCommand;
 import com.booksaw.betterTeams.commands.team.chest.ChestRemoveCommand;
 import com.booksaw.betterTeams.commands.team.chest.ChestRemoveallCommand;
-import com.booksaw.betterTeams.commands.teama.*;
-import com.booksaw.betterTeams.commands.teama.chest.*;
+import com.booksaw.betterTeams.commands.teama.AllyTeama;
+import com.booksaw.betterTeams.commands.teama.AnchorTeama;
+import com.booksaw.betterTeams.commands.teama.ChatSpyTeama;
+import com.booksaw.betterTeams.commands.teama.ColorTeama;
+import com.booksaw.betterTeams.commands.teama.CreateHoloTeama;
+import com.booksaw.betterTeams.commands.teama.CreateTeama;
+import com.booksaw.betterTeams.commands.teama.DelwarpTeama;
+import com.booksaw.betterTeams.commands.teama.DemoteTeama;
+import com.booksaw.betterTeams.commands.teama.DescriptionTeama;
+import com.booksaw.betterTeams.commands.teama.DisbandTeama;
+import com.booksaw.betterTeams.commands.teama.EchestTeama;
+import com.booksaw.betterTeams.commands.teama.HomeTeama;
+import com.booksaw.betterTeams.commands.teama.ImportmessagesTeama;
+import com.booksaw.betterTeams.commands.teama.InviteTeama;
+import com.booksaw.betterTeams.commands.teama.JoinTeama;
+import com.booksaw.betterTeams.commands.teama.LeaveTeama;
+import com.booksaw.betterTeams.commands.teama.NameTeama;
+import com.booksaw.betterTeams.commands.teama.NeutralTeama;
+import com.booksaw.betterTeams.commands.teama.OpenTeama;
+import com.booksaw.betterTeams.commands.teama.PromoteTeama;
+import com.booksaw.betterTeams.commands.teama.PurgeTeama;
+import com.booksaw.betterTeams.commands.teama.ReloadTeama;
+import com.booksaw.betterTeams.commands.teama.RemoveHoloTeama;
+import com.booksaw.betterTeams.commands.teama.SetAnchorTeama;
+import com.booksaw.betterTeams.commands.teama.SetOwnerTeama;
+import com.booksaw.betterTeams.commands.teama.SetrankTeama;
+import com.booksaw.betterTeams.commands.teama.SetwarpTeama;
+import com.booksaw.betterTeams.commands.teama.TagTeama;
+import com.booksaw.betterTeams.commands.teama.TeleportTeama;
+import com.booksaw.betterTeams.commands.teama.TitleTeama;
+import com.booksaw.betterTeams.commands.teama.VersionTeama;
+import com.booksaw.betterTeams.commands.teama.WarpTeama;
+import com.booksaw.betterTeams.commands.teama.chest.ChestClaimTeama;
+import com.booksaw.betterTeams.commands.teama.chest.ChestDisableClaims;
+import com.booksaw.betterTeams.commands.teama.chest.ChestEnableClaims;
+import com.booksaw.betterTeams.commands.teama.chest.ChestRemoveTeama;
+import com.booksaw.betterTeams.commands.teama.chest.ChestRemoveallTeama;
 import com.booksaw.betterTeams.commands.teama.money.AddMoney;
 import com.booksaw.betterTeams.commands.teama.money.RemoveMoney;
 import com.booksaw.betterTeams.commands.teama.money.SetMoney;
@@ -18,8 +101,16 @@ import com.booksaw.betterTeams.commands.teama.score.RemoveScore;
 import com.booksaw.betterTeams.commands.teama.score.SetScore;
 import com.booksaw.betterTeams.cooldown.CooldownManager;
 import com.booksaw.betterTeams.cost.CostManager;
-import com.booksaw.betterTeams.events.*;
+import com.booksaw.betterTeams.events.AllyManagement;
+import com.booksaw.betterTeams.events.ChatManagement;
+import com.booksaw.betterTeams.events.ChestManagement;
+import com.booksaw.betterTeams.events.DamageManagement;
+import com.booksaw.betterTeams.events.HomeAnchorManagement;
+import com.booksaw.betterTeams.events.InventoryManagement;
+import com.booksaw.betterTeams.events.MCTeamManagement;
 import com.booksaw.betterTeams.events.MCTeamManagement.BelowNameType;
+import com.booksaw.betterTeams.events.MessagesManagement;
+import com.booksaw.betterTeams.events.RankupEvents;
 import com.booksaw.betterTeams.integrations.UltimateClaimsManager;
 import com.booksaw.betterTeams.integrations.WorldGuardManagerV7;
 import com.booksaw.betterTeams.integrations.ZKothManager;
@@ -33,10 +124,6 @@ import com.booksaw.betterTeams.team.storage.StorageType;
 import com.booksaw.betterTeams.team.storage.convert.Converter;
 import com.booksaw.betterTeams.team.storage.storageManager.YamlStorageManager;
 import com.booksaw.betterTeams.util.WebhookHandler;
-import lombok.Getter;
-import net.kyori.adventure.platform.bukkit.BukkitAudiences;
-import net.milkbowl.vault.economy.Economy;
-import net.milkbowl.vault.permission.Permission;
 import org.bstats.bukkit.Metrics;
 import org.bstats.charts.SimplePie;
 import org.bukkit.Bukkit;
@@ -46,11 +133,10 @@ import org.bukkit.entity.Player;
 import org.bukkit.plugin.RegisteredServiceProvider;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.jetbrains.annotations.NotNull;
-
-import java.io.File;
-import java.util.Map.Entry;
-import java.util.Objects;
-import java.util.logging.Level;
+import lombok.Getter;
+import net.kyori.adventure.platform.bukkit.BukkitAudiences;
+import net.milkbowl.vault.economy.Economy;
+import net.milkbowl.vault.permission.Permission;
 
 /**
  * Main class of the plugin, extends JavaPlugin
@@ -100,6 +186,16 @@ public class Main extends JavaPlugin {
 
 	private boolean closeAdventure = true;
 
+	/**
+	 * A centralized helper method to safely check if the plugin is active.
+	 * This should be used before any scheduler calls or Bukkit API interactions
+	 * that rely on the plugin being enabled.
+	 * @return true if the plugin is not null and is enabled.
+	 */
+	public static boolean isPluginSafe() {
+		return plugin != null && plugin.isEnabled();
+	}
+
 	@Override
 	public void onLoad() {
 		plugin = this;
@@ -111,15 +207,18 @@ public class Main extends JavaPlugin {
 			if (ver == '7') {
 				wgManagement = new WorldGuardManagerV7();
 			} else {
-				Main.plugin.getLogger().warning("Your version of worldgaurd ("
+				getLogger().warning("Your version of worldguard ("
 						+ Bukkit.getPluginManager().getPlugin("WorldGuard").getDescription().getVersion()
-						+ ") is not yet supported (Currently supported: version 7.x.x), the betterteams flags will not be usable");
+						+ ") is not yet supported. Currently supported: version 7.x.x.");
 			}
 		}
 	}
 
 	@Override
 	public void onEnable() {
+		// Set the static instance to this instance of the plugin.
+		plugin = this;
+
 		setupMetrics();
 
 		String language = getConfig().getString("language");
@@ -128,9 +227,11 @@ public class Main extends JavaPlugin {
 			MessageManager.setLanguage("messages");
 		}
 
-		if (adventure == null) try {
-			adventure = BukkitAudiences.create(this);
-		} catch (Exception e) {
+		try {
+			if (adventure == null) {
+				adventure = BukkitAudiences.create(this);
+			}
+		} catch (Exception ignored) {
 		}
 
 		MessageManager.setupMessageSender(adventure);
@@ -149,11 +250,10 @@ public class Main extends JavaPlugin {
 		}
 
 		if (Bukkit.getPluginManager().getPlugin("UltimateClaims") != null
-				&& Objects.requireNonNull(Bukkit.getPluginManager().getPlugin("UltimateClaims")).isEnabled()) {
-			if (getConfig().getBoolean("ultimateClaims.enabled")) {
-				ultimateClaimsEnabled = true;
-				new UltimateClaimsManager();
-			}
+				&& Objects.requireNonNull(Bukkit.getPluginManager().getPlugin("UltimateClaims")).isEnabled()
+				&& getConfig().getBoolean("ultimateClaims.enabled")) {
+			ultimateClaimsEnabled = true;
+			new UltimateClaimsManager();
 		}
 
 		useHolograms = setupHolograms();
@@ -178,13 +278,16 @@ public class Main extends JavaPlugin {
 			temp.getValue().saveEchest();
 		}
 
-		if (useHolograms) {
+		if (useHolograms && HologramManager.holoManager != null) {
 			HologramManager.holoManager.disable();
 		}
 
 		if (teamManagement != null) {
 			teamManagement.removeAll(false);
 		}
+
+		// Cancel all tasks associated with this plugin to prevent them from running after disable.
+		Bukkit.getScheduler().cancelTasks(this);
 
 		Team.disable();
 
@@ -197,6 +300,10 @@ public class Main extends JavaPlugin {
 		}
 
 		closeAdventure = true;
+
+		// Nullify the static reference. This is CRITICAL for the isPluginSafe() check
+		// to work correctly after a reload from tools like PlugMan.
+		plugin = null;
 	}
 
 	public void loadCustomConfigs() {
@@ -208,9 +315,11 @@ public class Main extends JavaPlugin {
 				saveResource(language + ".yml", false);
 			}
 		} catch (Exception e) {
-			Main.plugin.getLogger().warning("Could not load selected language: " + language
-					+ " go to https://github.com/booksaw/BetterTeams/wiki/Language to view a list of supported languages");
-			Main.plugin.getLogger().warning("Reverting to english so the plugin can still function");
+			if (isPluginSafe()) {
+				getLogger().warning("Could not load selected language: " + language
+						+ " go to https://github.com/booksaw/BetterTeams/wiki/Language to view a list of supported languages");
+				getLogger().warning("Reverting to english so the plugin can still function");
+			}
 			MessageManager.setLanguage("messages");
 			loadCustomConfigs();
 			return;
@@ -233,27 +342,20 @@ public class Main extends JavaPlugin {
 
 		} else {
 			if (damageManagement != null) {
-				Main.plugin.getLogger().log(Level.WARNING, "Restart server for damage changes to apply");
+				if (isPluginSafe()) getLogger().log(Level.WARNING, "Restart server for damage changes to apply");
 			}
 		}
 
 		// loading the fully custom help message option
 		HelpCommand.setupHelp();
-
 	}
 
-	/*
-	 * Determines which holograms plugin the server is running, then creates a new
-	 * HologramManager instance for the respective plugin.
-	 */
 	private boolean setupHolograms() {
 		boolean hdHolos = Bukkit.getPluginManager().isPluginEnabled("HolographicDisplays");
 		if (hdHolos) {
 			new HDHologramManager();
 		}
 		boolean dhHolos = Bukkit.getPluginManager().isPluginEnabled("DecentHolograms");
-		// Check to make sure the server isn't running both hologram plugins.
-		// We don't need two HologramManager instances.
 		if (!hdHolos && dhHolos) {
 			new DHHologramManager();
 		}
@@ -286,22 +388,18 @@ public class Main extends JavaPlugin {
 	}
 
 	public void reload() {
-
 		closeAdventure = false;
 		onDisable();
 		teamManagement = null;
 		reloadConfig();
 		configManager = new ConfigManager("config", true);
-
 		ChatManagement.enable();
 		damageManagement = null;
 		onEnable();
-
 	}
 
 	public void setupCommands() {
 		teamCommand = new PermissionParentCommand(new CostManager("team"), new CooldownManager("team"), "team");
-		// add all sub commands here
 		teamCommand.addSubCommands(new CreateCommand(teamCommand), new LeaveCommand(), new DisbandCommand(),
 				new DescriptionCommand(), new InviteCommand(), new JoinCommand(), new NameCommand(), new OpenCommand(),
 				new InfoCommand(teamCommand), new KickCommand(), new PromoteCommand(), new DemoteCommand(),
@@ -318,7 +416,6 @@ public class Main extends JavaPlugin {
 		if (getConfig().getBoolean("disableCombat")) {
 			teamCommand.addSubCommand(new PvpCommand());
 		}
-		// only used if a team is only allowed a single owner
 		if (getConfig().getBoolean("singleOwner")) {
 			teamCommand.addSubCommand(new SetOwnerCommand());
 		}
@@ -331,7 +428,6 @@ public class Main extends JavaPlugin {
 				getConfig().getStringList("command.team"));
 
 		ParentCommand teamaCommand = new ParentCommand("teamadmin");
-
 		teamaCommand.addSubCommands(new ReloadTeama(), new ChatSpyTeama(), new TitleTeama(),
 				new VersionTeama("version"), new VersionTeama("debug"), new HomeTeama(), new NameTeama(),
 				new DescriptionTeama(), new OpenTeama(), new InviteTeama(), new CreateTeama(), new JoinTeama(),
@@ -374,32 +470,31 @@ public class Main extends JavaPlugin {
 
 		new BooksawCommand("teamadmin", teamaCommand, "betterteams.admin", "All admin commands for teams",
 				getConfig().getStringList("command.teama"));
-
 	}
 
 	public void setupListeners() {
-		Main.plugin.getLogger().info("Display team name config value: " + getConfig().getString("displayTeamName"));
+		getLogger().info("Display team name config value: " + getConfig().getString("displayTeamName"));
 		BelowNameType type = BelowNameType.getType(Objects.requireNonNull(getConfig().getString("displayTeamName")));
-		Main.plugin.getLogger().info("Loading below name. Type: " + type);
+		getLogger().info("Loading below name. Type: " + type);
 		if (getConfig().getBoolean("useTeams")) {
 			if (teamManagement == null) {
-
 				teamManagement = new MCTeamManagement(type);
-
-				Bukkit.getScheduler().runTaskAsynchronously(this, () -> teamManagement.displayBelowNameForAll());
+				// Guard the scheduler call, although it's generally safe in onEnable
+				if (isPluginSafe()) {
+					Bukkit.getScheduler().runTask(this, () -> teamManagement.displayBelowNameForAll());
+				}
 				getServer().getPluginManager().registerEvents(teamManagement, this);
-				Main.plugin.getLogger().info("teamManagement declared: " + teamManagement);
+				getLogger().info("teamManagement declared: " + teamManagement);
 			}
 		} else {
-			Main.plugin.getLogger().info("Not loading management");
+			getLogger().info("Not loading management");
 			if (teamManagement != null) {
-				Main.plugin.getLogger().log(Level.WARNING, "Restart server for minecraft team changes to apply");
+				getLogger().log(Level.WARNING, "Restart server for minecraft team changes to apply");
 			}
 		}
 
-		// loading the zkoth event listener
 		if (getServer().getPluginManager().isPluginEnabled("zKoth")) {
-			Main.plugin.getLogger().info("Found plugin zKoth, adding plugin integration");
+			getLogger().info("Found plugin zKoth, adding plugin integration");
 			getServer().getPluginManager().registerEvents(new ZKothManager(), this);
 		}
 
@@ -408,7 +503,6 @@ public class Main extends JavaPlugin {
 		getServer().getPluginManager().registerEvents(new AllyManagement(), this);
 		getServer().getPluginManager().registerEvents(new MessagesManagement(), this);
 
-		// Only register webhook when hook support is enabled
 		if (getConfig().getBoolean("hookSupport")) {
 			getServer().getPluginManager().registerEvents(new WebhookHandler(), this);
 		}
@@ -417,9 +511,7 @@ public class Main extends JavaPlugin {
 			getServer().getPluginManager().registerEvents(new UpdateChecker(this), this);
 		}
 
-		// disabling the chest checks (hoppers most importantly) to reduce needless
-		// performance cost
-		if (teamCommand.isEnabled("chest")) {
+		if (teamCommand != null && teamCommand.isEnabled("chest")) {
 			getServer().getPluginManager().registerEvents(new ChestManagement(), this);
 		}
 
@@ -449,7 +541,7 @@ public class Main extends JavaPlugin {
 		File f = new File("plugins/BetterTeams/" + YamlStorageManager.TEAMLISTSTORAGELOC + ".yml");
 
 		if (!f.exists()) {
-			Main.plugin.saveResource("teams.yml", false);
+			saveResource("teams.yml", false);
 		}
 
 		YamlConfiguration teamStorage = YamlConfiguration.loadConfiguration(f);
@@ -460,7 +552,7 @@ public class Main extends JavaPlugin {
 			Converter converter = Converter.getConverter(from, to);
 
 			if (converter == null) {
-				Main.plugin.getLogger().info("Cannot convert to the selected storage type (" + to.toString()
+				if(isPluginSafe()) getLogger().info("Cannot convert to the selected storage type (" + to.toString()
 						+ "), continuing with preexisting one (" + from.toString() + ")");
 				to = from;
 			} else {

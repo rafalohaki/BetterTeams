@@ -1,5 +1,16 @@
 package com.booksaw.betterTeams.team.storage.storageManager;
 
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Objects;
+import java.util.UUID;
 import com.booksaw.betterTeams.Main;
 import com.booksaw.betterTeams.Team;
 import com.booksaw.betterTeams.TeamPlayer;
@@ -17,12 +28,6 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.scheduler.BukkitRunnable;
-
-import java.io.File;
-import java.io.IOException;
-import java.nio.file.Files;
-import java.util.*;
-import java.util.Map.Entry;
 
 public class SeparatedYamlStorageManager extends YamlStorageManager implements Listener {
 
@@ -185,7 +190,7 @@ public class SeparatedYamlStorageManager extends YamlStorageManager implements L
 		saveTeamNameLookup();
 	}
 
-	@Override
+@Override
 	public void playerJoinTeam(Team team, TeamPlayer player) {
 		addToPlayerLookup(player.getPlayer().getUniqueId(), team.getID());
 	}
@@ -233,7 +238,7 @@ public class SeparatedYamlStorageManager extends YamlStorageManager implements L
 	private <T> String[] sortTeamByX(ValueSorter<T> valueSorter, Comparator<? super CrossReference<T>> comparator) {
 		File folder = SeparatedYamlTeamStorage.getTeamSaveFile();
 		List<CrossReference<T>> teams = new ArrayList<>();
-		for (File f : folder.listFiles()) {
+		for (File f : Objects.requireNonNull(folder.listFiles())) {
 			// team has already been resetS
 			try {
 				YamlConfiguration yamlConfig = new YamlConfiguration();
@@ -295,14 +300,20 @@ public class SeparatedYamlStorageManager extends YamlStorageManager implements L
 			function.resetLoadedTeamValue(team.getValue());
 		}
 
-		// purging all teams that are not loaded async to minimise server impact
+		if (!Main.isPluginSafe()) {
+			return;
+		}
+
 		new BukkitRunnable() {
 			@Override
 			public void run() {
-				for (File f : teamStorageDir.listFiles()) {
+				if (!Main.isPluginSafe()) {
+					return;
+				}
+
+				for (File f : Objects.requireNonNull(teamStorageDir.listFiles())) {
 					String teamID = f.getName();
 					teamID = teamID.replace(".yml", "");
-					// team has already been resetS
 					if (loadedTeamsClone.containsKey(UUID.fromString(teamID))) {
 						continue;
 					}
@@ -312,8 +323,10 @@ public class SeparatedYamlStorageManager extends YamlStorageManager implements L
 					try {
 						yamlConfig.save(f);
 					} catch (IOException e) {
-						Main.plugin.getLogger()
-								.warning("Failed to purge the " + storedTeamValue + "of the team with the file " + f.getPath());
+						if (Main.isPluginSafe()) {
+							Main.plugin.getLogger()
+									.warning("Failed to purge the " + storedTeamValue + "of the team with the file " + f.getPath());
+						}
 						e.printStackTrace();
 					}
 				}
@@ -411,7 +424,11 @@ public class SeparatedYamlStorageManager extends YamlStorageManager implements L
 		File folder = SeparatedYamlTeamStorage.getTeamSaveFile();
 
 		File[] files = folder.listFiles();
-
+		if (files == null) {
+			Main.plugin.getLogger().warning("Could not find any team files to rebuild lookups from.");
+			return;
+		}
+		
 		int i = 0;
 		for (File f : files) {
 			i++;
@@ -428,10 +445,10 @@ public class SeparatedYamlStorageManager extends YamlStorageManager implements L
 
 			try {
 
-				String teamName = config.getString(StoredTeamValue.NAME.getReference()).toLowerCase();
+				String teamName = Objects.requireNonNull(config.getString(StoredTeamValue.NAME.getReference())).toLowerCase();
 
 				// the file is invalid
-				if (teamName == null || teamName.isEmpty()) {
+				if (teamName.isEmpty()) {
 					continue;
 				}
 

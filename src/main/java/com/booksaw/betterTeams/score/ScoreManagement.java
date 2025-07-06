@@ -1,20 +1,20 @@
 package com.booksaw.betterTeams.score;
 
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 import com.booksaw.betterTeams.Main;
 import com.booksaw.betterTeams.Team;
 import com.booksaw.betterTeams.customEvents.post.PostPurgeEvent;
 import com.booksaw.betterTeams.score.ScoreChange.ChangeType;
-import me.clip.placeholderapi.PlaceholderAPI;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.PlayerDeathEvent;
+import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.scheduler.BukkitScheduler;
-
-import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
+import me.clip.placeholderapi.PlaceholderAPI;
 
 public class ScoreManagement implements Listener {
 
@@ -59,34 +59,49 @@ public class ScoreManagement implements Listener {
 	 * This class is used to schedule events
 	 */
 	private void sched() {
-		BukkitScheduler scheduler = Main.plugin.getServer().getScheduler();
-		scheduler.scheduleSyncRepeatingTask(Main.plugin, () -> {
+		if (!Main.plugin.isEnabled()) {
+			return;
+		}
 
-			if (purges.get(nextPurge).isNow()) {
-				if (run) {
+		BukkitScheduler scheduler = Main.plugin.getServer().getScheduler();
+		scheduler.scheduleSyncRepeatingTask(Main.plugin, new BukkitRunnable() {
+			@Override
+			public void run() {
+				// If the plugin is disabled while this task is running, cancel it.
+				if (!Main.plugin.isEnabled()) {
+					this.cancel();
 					return;
 				}
+				
+				if (purges.get(nextPurge).isNow()) {
+					if (run) {
+						return;
+					}
 
-				run = true;
-				Team.getTeamManager().purgeTeams(true, true);
-				if (nextPurge + 1 < purges.size()) {
-					nextPurge++;
-				} else {
-					nextPurge = 0;
+					run = true;
+					Team.getTeamManager().purgeTeams(true, true);
+					if (nextPurge + 1 < purges.size()) {
+						nextPurge++;
+					} else {
+						nextPurge = 0;
+					}
+					return;
 				}
-				return;
+				// clean pass so it can reset the tracker
+				run = false;
 			}
-			// clean pass so it can reset the tracker
-			run = false;
-
 		}, 0L, 20 * 60L);
 
 	}
 
 	@EventHandler
 	public void onPurge(PostPurgeEvent e) {
+		if (!Main.plugin.isEnabled()) {
+			return;
+		}
+		
 		Bukkit.getScheduler().runTask(Main.plugin, () -> Main.plugin.getConfig().getStringList("purgeCommands").forEach(cmd -> {
-			if (Main.plugin.getServer().getPluginManager().isPluginEnabled("PlaceholderAPI")) {
+			if (Main.placeholderAPI) {
 				cmd = PlaceholderAPI.setPlaceholders(null, cmd);
 			}
 
@@ -96,7 +111,7 @@ public class ScoreManagement implements Listener {
 
 	@EventHandler
 	public void onKill(PlayerDeathEvent e) {
-		Player killed = e.getEntity().getPlayer();
+		Player killed = e.getEntity();
 		// score decreases
 		Team killedTeam = Team.getTeam(killed);
 		if (killedTeam != null) {
@@ -107,7 +122,7 @@ public class ScoreManagement implements Listener {
 			return;
 		}
 
-		Player killer = e.getEntity().getKiller().getPlayer();
+		Player killer = e.getEntity().getKiller();
 		Team killerTeam = Team.getTeam(killer);
 		if (killerTeam == null) {
 			return;
@@ -128,7 +143,7 @@ public class ScoreManagement implements Listener {
 			scoreForKill = Main.plugin.getConfig().getInt("events.kill.score");
 		}
 
-		if (souceTeam == targetTeam) {
+		if (souceTeam.equals(targetTeam)) {
 			souceTeam.setScore(souceTeam.getScore() - scoreForKill);
 		} else {
 			souceTeam.setScore(souceTeam.getScore() + scoreForKill);
@@ -170,7 +185,6 @@ public class ScoreManagement implements Listener {
 			} else {
 				return date.hours > hours;
 			}
-
 		}
 
 		/**

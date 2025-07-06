@@ -1,5 +1,6 @@
 package com.booksaw.betterTeams.commands.team;
 
+import java.util.List;
 import com.booksaw.betterTeams.CommandResponse;
 import com.booksaw.betterTeams.Main;
 import com.booksaw.betterTeams.Team;
@@ -8,8 +9,6 @@ import com.booksaw.betterTeams.message.MessageManager;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.scheduler.BukkitRunnable;
-
-import java.util.List;
 
 public class BaltopCommand extends SubCommand {
 
@@ -22,14 +21,24 @@ public class BaltopCommand extends SubCommand {
 			teamPre = Team.getTeam((Player) sender);
 		}
 
-		Team team = teamPre;
+		final Team team = teamPre;
 
 		MessageManager.sendMessage(sender, "loading");
+
+		// Guard against scheduling a task if the plugin is not in a safe state.
+		if (!Main.isPluginSafe()) {
+			return new CommandResponse(true);
+		}
 
 		new BukkitRunnable() {
 
 			@Override
 			public void run() {
+				// Guard the async task execution in case the plugin was disabled while it was queued.
+				if (!Main.isPluginSafe()) {
+					return;
+				}
+
 				boolean contained = false;
 				String[] teams = Team.getTeamManager().sortTeamsByBalance();
 				MessageManager.sendMessage(sender, "baltop.leaderboard");
@@ -37,11 +46,12 @@ public class BaltopCommand extends SubCommand {
 				for (int i = 0; i < 10 && i < teams.length; i++) {
 					Team tempTeam = Team.getTeam(teams[i]);
 					if (tempTeam == null) {
-						Main.plugin.getLogger().severe("Files are out of sync. Please set `rebuildLookups` to true and restart your server");
+						// Guard the logger call
+						if(Main.isPluginSafe()) Main.plugin.getLogger().severe("Files are out of sync. Please set `rebuildLookups` to true and restart your server");
 						continue;
 					}
 					MessageManager.sendMessage(sender, "baltop.syntax", i + 1, tempTeam.getName(), tempTeam.getBalance());
-					if (team == tempTeam) {
+					if (team != null && team.equals(tempTeam)) {
 						contained = true;
 					}
 				}
@@ -59,14 +69,14 @@ public class BaltopCommand extends SubCommand {
 							MessageManager.sendMessage(sender, "baltop.divide");
 							if (rank - 2 > 9) {
 								Team tm2 = Team.getTeam(teams[rank - 2]);
-								MessageManager.sendMessage(sender, "baltop.syntax", rank - 1, tm2.getName(), tm2.getBalance());
+								if (tm2 != null) MessageManager.sendMessage(sender, "baltop.syntax", rank - 1, tm2.getName(), tm2.getBalance());
 							}
 
 							MessageManager.sendMessage(sender, "baltop.syntax", rank, team.getName(), team.getBalance());
 
 							if (teams.length > rank) {
 								Team tm = Team.getTeam(teams[rank]);
-								MessageManager.sendMessage(sender, "baltop.syntax", rank + 1, tm.getName(), tm.getBalance());
+								if (tm != null) MessageManager.sendMessage(sender, "baltop.syntax", rank + 1, tm.getName(), tm.getBalance());
 							}
 						}
 					} catch (ArrayIndexOutOfBoundsException e) {

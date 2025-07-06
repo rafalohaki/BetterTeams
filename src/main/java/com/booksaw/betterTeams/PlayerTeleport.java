@@ -28,16 +28,21 @@ public class PlayerTeleport {
 	 * @throws Exception Well, isn't this a generic one?
 	 */
 	public PlayerTeleport(Player player, Location location, String reference) throws Exception {
+		// FIX: Initialize all final fields at the top of the constructor
+		// to ensure they are assigned a value in all possible code paths.
+		this.player = player;
+		this.location = location;
+		this.reference = reference;
+		this.playerLoc = player.getLocation();
+
 		if (location == null || location.getWorld() == null) {
 			throw new Exception("Location or world is null");
 		}
 
-		this.player = player;
-		this.location = location;
-		this.reference = reference;
-
-		this.playerLoc = player.getLocation();
-
+		// Do not start the teleport process if the plugin is disabled.
+		if (!Main.plugin.isEnabled()) {
+			return;
+		}
 
 		if (player.hasPermission("betterteams.warmup.bypass")) {
 			Bukkit.getScheduler().runTask(Main.plugin, this::runTp);
@@ -54,11 +59,17 @@ public class PlayerTeleport {
 		MessageManager.sendMessage(player, "teleport.wait", wait);
 
 		Bukkit.getScheduler().runTaskLater(Main.plugin, () -> {
+			// Final check to ensure the plugin was not disabled during the warmup period.
+			if (!Main.plugin.isEnabled()) {
+				return;
+			}
+
 			if (canTp()) {
 				try {
 					runTp();
 				} catch (Exception e) {
-					throw new NullPointerException();
+					// This should not happen with the previous null checks, but as a safeguard.
+					e.printStackTrace();
 				}
 			} else {
 				cancel();
@@ -69,7 +80,7 @@ public class PlayerTeleport {
 
 	public void runTp() {
 		if (location == null || location.getWorld() == null) {
-			throw new NullPointerException("Location = " + location + " world is = " + ((location == null) ? location.getWorld() : "BLANK"));
+			throw new NullPointerException("Location = " + location + " world is = " + ((location != null) ? location.getWorld() : "BLANK"));
 		}
 
 		PlayerTeleportEvent event = new PlayerTeleportEvent(player, player.getLocation(), location);
@@ -88,7 +99,9 @@ public class PlayerTeleport {
 			return true;
 		}
 
-		return playerLoc.getWorld() == player.getLocation().getWorld() && playerLoc.distance(player.getLocation()) <= Math.abs(Main.plugin.getConfig().getInt("maxMove"));
+		return player.isOnline() && playerLoc.getWorld() != null && player.getLocation().getWorld() != null &&
+				playerLoc.getWorld().equals(player.getLocation().getWorld()) &&
+				playerLoc.distance(player.getLocation()) <= Math.abs(Main.plugin.getConfig().getInt("maxMove"));
 	}
 
 	public void cancel() {

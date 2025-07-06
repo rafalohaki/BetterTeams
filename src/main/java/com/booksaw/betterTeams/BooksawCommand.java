@@ -1,10 +1,11 @@
 package com.booksaw.betterTeams;
 
+import java.lang.reflect.Field;
+import java.util.ArrayList;
+import java.util.List;
 import com.booksaw.betterTeams.commands.ParentCommand;
 import com.booksaw.betterTeams.commands.SubCommand;
 import com.booksaw.betterTeams.message.MessageManager;
-import lombok.Getter;
-import lombok.Setter;
 import org.bukkit.Bukkit;
 import org.bukkit.command.CommandMap;
 import org.bukkit.command.CommandSender;
@@ -12,16 +13,9 @@ import org.bukkit.command.defaults.BukkitCommand;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
+import lombok.Getter;
+import lombok.Setter;
 
-import java.lang.reflect.Field;
-import java.util.ArrayList;
-import java.util.List;
-
-/**
- * Used to register a command which uses the sub command system
- *
- * @author booksaw
- */
 @Getter
 @Setter
 public class BooksawCommand extends BukkitCommand {
@@ -50,18 +44,19 @@ public class BooksawCommand extends BukkitCommand {
 
 	@Override
 	public boolean execute(@NotNull CommandSender sender, @NotNull String label, String[] args) {
-		// running custom command manager
+		if (!Main.isPluginSafe()) {
+			sender.sendMessage("§c[BetterTeams] Command cannot be executed as the plugin is disabled.");
+			return true;
+		}
+		
 		if (checkPointers(sender, label, args)) {
-			// if pointers were found and dealt with
 			return true;
 		}
 
-		boolean async = subCommand.checkAsync(args);
-
-		if (async) {
-			Bukkit.getScheduler().runTaskAsynchronously(Main.plugin, () -> runExecution(sender, label, args));
-		} else {
+		if (Bukkit.isPrimaryThread()) {
 			runExecution(sender, label, args);
+		} else {
+			Bukkit.getScheduler().runTask(Main.plugin, () -> runExecution(sender, label, args));
 		}
 
 		return true;
@@ -79,8 +74,10 @@ public class BooksawCommand extends BukkitCommand {
 			if (response != null)
 				response.sendResponseMessage(sender);
 		} catch (Exception e) {
-			Main.plugin.getLogger().severe(
-					"Something went wrong while executing the command, please report this https://github.com/booksaw/BetterTeams/issues/new/choose");
+			if (Main.isPluginSafe()) {
+				Main.plugin.getLogger().severe(
+						"Something went wrong while executing the command, please report this https://github.com/booksaw/betterTeams/issues/new/choose");
+			}
 			e.printStackTrace();
 			MessageManager.sendMessage(sender, "internalError");
 		}
@@ -88,6 +85,10 @@ public class BooksawCommand extends BukkitCommand {
 
 	@Override
 	public @NotNull List<String> tabComplete(@NotNull CommandSender sender, @NotNull String label, String[] args) {
+		if (!Main.isPluginSafe()) {
+			return new ArrayList<>();
+		}
+		
 		List<String> options = new ArrayList<>();
 		subCommand.onTabComplete(options, sender, label, args);
 
@@ -103,7 +104,7 @@ public class BooksawCommand extends BukkitCommand {
 			if (!str.startsWith("@")) {
 				continue;
 			}
-			// a selector is found
+			
 			boolean found = false;
 			try {
 				for (Entity e : Bukkit.selectEntities(sender, str)) {
@@ -115,9 +116,7 @@ public class BooksawCommand extends BukkitCommand {
 								newArgs[j] = e.getName();
 							}
 						}
-
 						execute(sender, label, newArgs);
-
 					}
 				}
 			} catch (Exception e) {
@@ -126,8 +125,6 @@ public class BooksawCommand extends BukkitCommand {
 
 			return found;
 		}
-
-		// no selector was found
 		return false;
 	}
 }

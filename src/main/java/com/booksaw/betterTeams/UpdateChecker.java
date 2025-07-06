@@ -1,15 +1,5 @@
 package com.booksaw.betterTeams;
 
-import com.booksaw.betterTeams.message.MessageManager;
-import net.md_5.bungee.api.ChatColor;
-import org.bukkit.Bukkit;
-import org.bukkit.event.EventHandler;
-import org.bukkit.event.Listener;
-import org.bukkit.event.player.PlayerJoinEvent;
-import org.bukkit.plugin.java.JavaPlugin;
-import org.bukkit.scheduler.BukkitRunnable;
-
-import javax.net.ssl.HttpsURLConnection;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -17,6 +7,15 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.Arrays;
 import java.util.stream.IntStream;
+import javax.net.ssl.HttpsURLConnection;
+import com.booksaw.betterTeams.message.MessageManager;
+import org.bukkit.Bukkit;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.Listener;
+import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.scheduler.BukkitRunnable;
+import net.md_5.bungee.api.ChatColor;
 
 public class UpdateChecker implements Listener {
 	private static final int ID = 17129;
@@ -33,13 +32,21 @@ public class UpdateChecker implements Listener {
 		this.localPluginVersion = javaPlugin.getDescription().getVersion();
 		checkForUpdate();
 	}
-
+	
 	public void checkForUpdate() {
+		if (!Main.isPluginSafe()) {
+			return;
+		}
+		
 		(new BukkitRunnable() {
 			@Override
 			public void run() {
+				if (!Main.isPluginSafe()) {
+					cancel();
+					return;
+				}
+
 				try {
-					// Create URL using the URI class which handles IDNs properly
 					URI uri = new URI("https://api.spigotmc.org/legacy/update.php?resource=" + ID);
 					HttpsURLConnection connection = (HttpsURLConnection) uri.toURL().openConnection();
 					connection.setRequestMethod("GET");
@@ -54,10 +61,13 @@ public class UpdateChecker implements Listener {
 					return;
 				}
 
-				if (isLatestVersion())
+				if (isLatestVersion()) {
 					return;
+				}
 
-				Main.plugin.getLogger().warning(MessageManager.getMessage("admin.update"));
+				if (Main.isPluginSafe()) {
+					Main.plugin.getLogger().warning(MessageManager.getMessage("admin.update"));
+				}
 
 				latest = false;
 				cancel();

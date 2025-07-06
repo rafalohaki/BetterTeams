@@ -1,20 +1,62 @@
 package com.booksaw.betterTeams;
 
-import com.booksaw.betterTeams.customEvents.*;
-import com.booksaw.betterTeams.customEvents.post.*;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+import com.booksaw.betterTeams.customEvents.DemotePlayerEvent;
+import com.booksaw.betterTeams.customEvents.DisbandTeamEvent;
+import com.booksaw.betterTeams.customEvents.PromotePlayerEvent;
+import com.booksaw.betterTeams.customEvents.RelationChangeTeamEvent;
+import com.booksaw.betterTeams.customEvents.TeamColorChangeEvent;
+import com.booksaw.betterTeams.customEvents.TeamDisallowedPvPEvent;
+import com.booksaw.betterTeams.customEvents.TeamMessageEvent;
+import com.booksaw.betterTeams.customEvents.TeamNameChangeEvent;
+import com.booksaw.betterTeams.customEvents.TeamPreMessageEvent;
+import com.booksaw.betterTeams.customEvents.TeamSendMessageEvent;
+import com.booksaw.betterTeams.customEvents.TeamTagChangeEvent;
+import com.booksaw.betterTeams.customEvents.post.PostDemotePlayerEvent;
+import com.booksaw.betterTeams.customEvents.post.PostDisbandTeamEvent;
+import com.booksaw.betterTeams.customEvents.post.PostPromotePlayerEvent;
+import com.booksaw.betterTeams.customEvents.post.PostRelationChangeTeamEvent;
+import com.booksaw.betterTeams.customEvents.post.PostTeamColorChangeEvent;
+import com.booksaw.betterTeams.customEvents.post.PostTeamNameChangeEvent;
+import com.booksaw.betterTeams.customEvents.post.PostTeamSendMessageEvent;
+import com.booksaw.betterTeams.customEvents.post.PostTeamTagChangeEvent;
 import com.booksaw.betterTeams.exceptions.CancelledEventException;
 import com.booksaw.betterTeams.message.ChatMessage;
 import com.booksaw.betterTeams.message.Message;
 import com.booksaw.betterTeams.message.MessageManager;
 import com.booksaw.betterTeams.message.ReferencedFormatMessage;
-import com.booksaw.betterTeams.team.*;
+import com.booksaw.betterTeams.team.AllyRequestComponent;
+import com.booksaw.betterTeams.team.AllySetComponent;
+import com.booksaw.betterTeams.team.AnchoredPlayerUUIDSetComponent;
 import com.booksaw.betterTeams.team.AnchoredPlayerUUIDSetComponent.AnchorResult;
+import com.booksaw.betterTeams.team.BanSetComponent;
+import com.booksaw.betterTeams.team.ChestClaimComponent;
+import com.booksaw.betterTeams.team.EChestComponent;
+import com.booksaw.betterTeams.team.LocationSetComponent;
+import com.booksaw.betterTeams.team.MemberSetComponent;
+import com.booksaw.betterTeams.team.MoneyComponent;
+import com.booksaw.betterTeams.team.ScoreComponent;
+import com.booksaw.betterTeams.team.TeamManager;
+import com.booksaw.betterTeams.team.WarpSetComponent;
 import com.booksaw.betterTeams.team.storage.StorageType;
 import com.booksaw.betterTeams.team.storage.team.StoredTeamValue;
 import com.booksaw.betterTeams.team.storage.team.TeamStorage;
 import com.booksaw.betterTeams.text.LegacyTextUtils;
-import lombok.Getter;
-import org.bukkit.*;
+import org.bukkit.Bukkit;
+import org.bukkit.ChatColor;
+import org.bukkit.Location;
+import org.bukkit.Material;
+import org.bukkit.OfflinePlayer;
 import org.bukkit.block.Block;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
@@ -24,11 +66,7 @@ import org.bukkit.scoreboard.Scoreboard;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
-
-import java.util.*;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-import java.util.stream.Collectors;
+import lombok.Getter;
 
 /**
  * This class is used to manage a team and all of it's participants
@@ -845,8 +883,13 @@ public class Team {
 	 *
 	 * @param uniqueId the UUID of the player being invited
 	 */
-	public void invite(UUID uniqueId) {
+public void invite(UUID uniqueId) {
 		invitedPlayers.add(uniqueId);
+
+		// Ensure plugin is safe before accessing config or scheduling tasks
+		if (!Main.isPluginSafe()) {
+			return;
+		}
 
 		int invite = Main.plugin.getConfig().getInt("invite");
 
@@ -855,9 +898,13 @@ public class Team {
 		}
 
 		new BukkitRunnable() {
-
 			@Override
 			public void run() {
+				// Guard the async task execution
+				if (!Main.isPluginSafe()) {
+					return;
+				}
+
 				Player p = Bukkit.getPlayer(uniqueId);
 				if (p == null || getTeamPlayer(p) != null) {
 					return;
@@ -867,7 +914,6 @@ public class Team {
 				MessageManager.sendMessage(p, "invite.expired", getName());
 			}
 		}.runTaskLaterAsynchronously(Main.plugin, invite * 20L);
-
 	}
 
 	/**

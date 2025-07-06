@@ -1,5 +1,6 @@
 package com.booksaw.betterTeams.commands.team;
 
+import java.util.List;
 import com.booksaw.betterTeams.CommandResponse;
 import com.booksaw.betterTeams.Main;
 import com.booksaw.betterTeams.Team;
@@ -8,14 +9,11 @@ import com.booksaw.betterTeams.message.MessageManager;
 import org.bukkit.command.CommandSender;
 import org.bukkit.scheduler.BukkitRunnable;
 
-import java.util.List;
-
 public class ListCommand extends SubCommand {
 
 	@Override
 	public CommandResponse onCommand(CommandSender sender, String label, String[] args) {
-
-		int page;
+		final int page;
 		if (args.length == 0) {
 			page = 0;
 		} else {
@@ -27,15 +25,19 @@ public class ListCommand extends SubCommand {
 		}
 
 		MessageManager.sendMessage(sender, "loading");
+		
+		if (!Main.isPluginSafe()) return new CommandResponse(true);
 
 		new BukkitRunnable() {
-
 			@Override
 			public void run() {
+				if (!Main.isPluginSafe()) {
+					return;
+				}
+
 				String[] teams = Team.getTeamManager().sortTeamsByMembers();
 
-				// displaying the page
-				if (page * 10 > teams.length) {
+				if (page < 0 || page * 10 > teams.length) {
 					MessageManager.sendMessage(sender, "list.noPage");
 					return;
 				}
@@ -44,7 +46,6 @@ public class ListCommand extends SubCommand {
 				for (int i = page * 10; i < (page + 1) * 10 && i < teams.length; i++) {
 					MessageManager.sendMessage(sender, "list.body", i + 1, teams[i]);
 				}
-
 				MessageManager.sendMessage(sender, "list.footer");
 			}
 		}.runTaskAsynchronously(Main.plugin);
@@ -83,7 +84,6 @@ public class ListCommand extends SubCommand {
 
 	@Override
 	public void onTabComplete(List<String> options, CommandSender sender, String label, String[] args) {
-
 	}
 
 }
