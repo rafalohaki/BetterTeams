@@ -1,11 +1,12 @@
 package com.booksaw.betterTeams.events;
 
+import java.util.ArrayList;
+import java.util.List;
 import com.booksaw.betterTeams.Main;
 import com.booksaw.betterTeams.Team;
 import com.booksaw.betterTeams.TeamPlayer;
 import com.booksaw.betterTeams.message.MessageManager;
 import com.booksaw.betterTeams.text.LegacyTextUtils;
-
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -13,9 +14,6 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.AsyncPlayerChatEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
-
-import java.util.ArrayList;
-import java.util.List;
 
 public class ChatManagement implements Listener {
 
@@ -48,8 +46,20 @@ public class ChatManagement implements Listener {
 
 		TeamPlayer teamPlayer = team.getTeamPlayer(p);
 
+		// FIXED: Replaced the hard crash with a robust, fail-safe check.
 		if (teamPlayer == null) {
-			throw new IllegalStateException("Player " + p.getName() + " is registered to be in a team, yet has no playerdata associated with that team");
+			// Log a detailed warning to the console so the server admin is aware of the data corruption.
+			Main.plugin.getLogger().warning("Player " + p.getName() + " (" + p.getUniqueId() + ") is in a team but has no associated player data. This is a data inconsistency.");
+			
+			// As per the final suggestion, this calls team.removePlayer() to self-heal the data.
+			// It is assumed that team.removePlayer(Player) has its own internal checks (i.e., containsKey)
+			// to ensure it can safely handle being called in this state without causing another error.
+			Main.plugin.getLogger().warning("Attempting to automatically remove the player from the team to resolve the issue.");
+			team.removePlayer(p);
+
+			// Stop processing this chat event for this player, as they are now considered team-less.
+			// This prevents the original crash and allows the chat system to function normally for everyone else.
+			return;
 		}
 
 		String anyChatToGlobalPrefix = Main.plugin.getConfig().getString("chatPrefixes.teamOrAllyToGlobal", "!");
