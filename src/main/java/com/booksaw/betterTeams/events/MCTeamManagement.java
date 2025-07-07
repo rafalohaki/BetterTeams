@@ -11,11 +11,13 @@ import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
+import org.bukkit.event.player.PlayerChangedWorldEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.scoreboard.Scoreboard;
 import org.bukkit.scoreboard.Team.Option;
 import org.bukkit.scoreboard.Team.OptionStatus;
 import lombok.Getter;
+import me.clip.placeholderapi.PlaceholderAPI;
 
 public class MCTeamManagement implements Listener {
 
@@ -25,11 +27,10 @@ public class MCTeamManagement implements Listener {
 
     public MCTeamManagement(BelowNameType type) {
         this.type = type;
-        board = Objects.requireNonNull(Bukkit.getScoreboardManager()).getMainScoreboard();
+        board = Objects.requireNonNull(Bukkit.getScoreboardManager()).getNewScoreboard();
     }
 
     private void runSync(Runnable task) {
-        // Central guard to ensure no scoreboard operations are attempted if the plugin is disabled.
         if (!Main.plugin.isEnabled()) {
             return;
         }
@@ -55,19 +56,22 @@ public class MCTeamManagement implements Listener {
     }
 
     private void displayBelowNameSync(Player player) {
-        player.setScoreboard(board);
+        // ✅ 1. Only assign the scoreboard if it's not already the one managed by this plugin.
+        // This avoids redundant packet sending and potential flicker/conflicts with other plugins.
+        if (!player.getScoreboard().equals(board)) {
+            player.setScoreboard(board);
+        }
 
         Team team = Team.getTeam(player);
         if (team == null) return;
-
         if (!player.hasPermission("betterteams.teamName")) return;
 
-        Bukkit.getPluginManager().callEvent(new BelowNameChangeEvent(player, ChangeType.ADD));
-
         try {
-            team.getScoreboardTeam(board).addEntry(player.getName());
+            org.bukkit.scoreboard.Team scoreboardTeam = team.getScoreboardTeam(board);
+            scoreboardTeam.addEntry(player.getName());
+            Bukkit.getPluginManager().callEvent(new BelowNameChangeEvent(player, ChangeType.ADD));
         } catch (IllegalStateException e) {
-            Main.plugin.getLogger().severe("Could not register the team name in the tab menu due to a conflict, see https://github.com/booksaw/BetterTeams/wiki/Managing-the-TAB-Menu error: " + e.getMessage());
+            Main.plugin.getLogger().severe("Could not register the team name for " + player.getName() + " due to a conflict. See wiki for details. Error: " + e.getMessage());
         }
     }
 
@@ -75,66 +79,55 @@ public class MCTeamManagement implements Listener {
         removeAll(true);
     }
 
-    /**
-     * Used when the plugin is disabled
-     */
     public void removeAll(boolean callEvent) {
         runSync(() -> {
             for (Player p : Bukkit.getOnlinePlayers()) {
                 remove(p, callEvent);
+                p.setScoreboard(Bukkit.getScoreboardManager().getMainScoreboard());
             }
-
-            // only loaded teams will have a team manager
+            // Note: A more robust implementation would track and unregister only teams created by this plugin.
             for (Entry<UUID, Team> t : Team.getTeamManager().getLoadedTeamListClone().entrySet()) {
                 org.bukkit.scoreboard.Team team = t.getValue().getScoreboardTeamOrNull();
-
                 if (team != null) {
-                    team.unregister();
+                    try {
+                        team.unregister();
+                    } catch (IllegalStateException e) {
+                        // Can be thrown on shutdown, safe to ignore.
+                    }
                 }
-
             }
         });
     }
-
+    
     public void remove(Player player) {
         remove(player, true);
     }
 
-    /**
-     * Used to remove the prefix / suffix from the specified player
-     *
-     * @param player    the player to remove the prefix/suffix from
-     * @param callEvent if BelowNameChangeEvent should be called
-     */
     public void remove(Player player, boolean callEvent) {
         runSync(() -> {
-            if (player == null) {
-                return;
-            }
-
+            if (player == null) return;
             Team team = Team.getTeam(player);
-            if (team == null) {
-                return;
-            }
-
+            if (team == null) return;
             org.bukkit.scoreboard.Team scoreboardTeam = team.getScoreboardTeamOrNull();
-            if (scoreboardTeam == null || !scoreboardTeam.hasEntry(player.getName())) {
+            if (scoreboardTeam == null) {
+                Main.plugin.getLogger().info("Attempted to remove " + player.getName() + " from a scoreboard team that no longer exists. No action needed.");
                 return;
             }
-
+            if (!scoreboardTeam.hasEntry(player.getName())) return;
             try {
                 scoreboardTeam.removeEntry(player.getName());
+                if (callEvent) {
+                    Bukkit.getPluginManager().callEvent(new BelowNameChangeEvent(player, ChangeType.REMOVE));
+                }
             } catch (Exception e) {
-                Main.plugin.getLogger().warning(
-                        "Another plugin is conflicting with the functionality of the BetterTeams. See the wiki page: https://github.com/booksaw/BetterTeams/wiki/Managing-the-TAB-Menu for more information");
-                return;
-            }
-
-            if (callEvent) {
-                BelowNameChangeEvent event = new BelowNameChangeEvent(player, ChangeType.REMOVE);
-                Bukkit.getPluginManager().callEvent(event);
+                Main.plugin.getLogger().warning("Could not remove scoreboard entry for " + player.getName() + ". Another plugin may be interfering. See wiki for details.");
             }
         });
+    }
+    
+    public void refreshDisplay(Player player) {
+        remove(player, false);
+        displayBelowName(player);
     }
 
     @EventHandler
@@ -142,46 +135,66 @@ public class MCTeamManagement implements Listener {
         displayBelowName(e.getPlayer());
     }
 
-    public void setupTeam(org.bukkit.scoreboard.Team team, String teamName) {
-        // setting team name
-        if (type == BelowNameType.PREFIX) {
-            team.setPrefix(teamName);
-        } else if (type == BelowNameType.SUFFIX) {
-            team.setSuffix(" " + teamName);
-        }
-
-        if (!Main.plugin.getConfig().getBoolean("collide")) {
-            team.setOption(Option.COLLISION_RULE, OptionStatus.FOR_OWN_TEAM);
-        }
-
-        if (Main.plugin.getConfig().getBoolean("privateDeath")) {
-            team.setOption(Option.DEATH_MESSAGE_VISIBILITY, OptionStatus.FOR_OWN_TEAM);
-        }
-
-        if (Main.plugin.getConfig().getBoolean("privateName")) {
-            // FIX: Corrected typo from FOR_OTHER_TEIMS to FOR_OTHER_TEAMS
-            team.setOption(Option.NAME_TAG_VISIBILITY, OptionStatus.FOR_OTHER_TEAMS);
-        }
-
-        team.setCanSeeFriendlyInvisibles(Main.plugin.getConfig().getBoolean("canSeeFriendlyInvisibles"));
-
+    @EventHandler
+    public void onWorldChange(PlayerChangedWorldEvent e) {
+        displayBelowName(e.getPlayer());
     }
 
+    public void setupTeam(org.bukkit.scoreboard.Team team, String teamName) {
+        String display = teamName;
+
+        if (Bukkit.getPluginManager().isPluginEnabled("PlaceholderAPI")) {
+            Player context = team.getEntries().stream()
+                    .map(Bukkit::getPlayerExact)
+                    .filter(Objects::nonNull)
+                    .findFirst()
+                    .orElse(null);
+            if (context != null) {
+                // Add a fail-safe try-catch block to prevent errors from external placeholders
+                // from crashing the scoreboard update logic.
+                try {
+                    display = PlaceholderAPI.setPlaceholders(context, display);
+                } catch (Exception ex) {
+                    Main.plugin.getLogger().warning("Failed to parse PlaceholderAPI in scoreboard display for " + context.getName() + ": " + ex.getMessage());
+                }
+            }
+        }
+        
+        if (type == BelowNameType.PREFIX) {
+            team.setPrefix(trimLegacyText(display, 16));
+        } else if (type == BelowNameType.SUFFIX) {
+            team.setSuffix(trimLegacyText(" " + display, 16));
+        }
+
+        if (!Main.plugin.getConfig().getBoolean("collide")) team.setOption(Option.COLLISION_RULE, OptionStatus.FOR_OWN_TEAM);
+        if (Main.plugin.getConfig().getBoolean("privateDeath")) team.setOption(Option.DEATH_MESSAGE_VISIBILITY, OptionStatus.FOR_OWN_TEAM);
+        if (Main.plugin.getConfig().getBoolean("privateName")) team.setOption(Option.NAME_TAG_VISIBILITY, OptionStatus.FOR_OTHER_TEAMS);
+        team.setCanSeeFriendlyInvisibles(Main.plugin.getConfig().getBoolean("canSeeFriendlyInvisibles"));
+    }
+    
+    private String trimLegacyText(String input, int maxLength) {
+        if (input == null || input.isEmpty()) return "";
+        StringBuilder result = new StringBuilder();
+        int length = 0;
+        boolean inColorCode = false;
+        for (char c : input.toCharArray()) {
+            if (c == '§') inColorCode = true;
+            else if (inColorCode) inColorCode = false;
+            else length++;
+            if (length > maxLength) break;
+            result.append(c);
+        }
+        return result.toString();
+    }
+    
     public enum BelowNameType {
         PREFIX, SUFFIX, FALSE;
-
         public static BelowNameType getType(String string) {
-
             switch (string.toLowerCase()) {
-                case "prefix":
-                case "true":
-                    return PREFIX;
-                case "suffix":
-                    return SUFFIX;
-                default:
-                    return FALSE;
+                case "prefix": case "true": return PREFIX;
+                case "suffix": return SUFFIX;
+                default: return FALSE;
             }
         }
     }
-
 }

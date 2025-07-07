@@ -1,9 +1,7 @@
 package com.booksaw.betterTeams.text;
 
 import java.util.Set;
-
 import com.google.common.collect.ImmutableSet;
-
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
 import net.kyori.adventure.text.minimessage.Context;

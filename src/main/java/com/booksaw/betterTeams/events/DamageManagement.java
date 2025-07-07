@@ -1,8 +1,16 @@
 package com.booksaw.betterTeams.events;
 
+import java.util.Collection;
+import java.util.Objects;
 import com.booksaw.betterTeams.Main;
 import com.booksaw.betterTeams.Team;
-import org.bukkit.entity.*;
+import org.bukkit.NamespacedKey;
+import org.bukkit.entity.Entity;
+import org.bukkit.entity.LivingEntity;
+import org.bukkit.entity.Player;
+import org.bukkit.entity.Projectile;
+import org.bukkit.entity.TNTPrimed;
+import org.bukkit.entity.ThrownPotion;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
@@ -12,131 +20,93 @@ import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 import org.bukkit.projectiles.ProjectileSource;
 
-import java.util.Collection;
-import java.util.Objects;
-
-/**
- * This class is used to ensure that members of the same team cannot hit each
- * other
- *
- * @author booksaw
- */
 public class DamageManagement implements Listener {
 
 	private final boolean disablePotions;
 	private final boolean disableSelf;
+
+	// Cache the PotionEffectType lookups for performance, using modern NamespacedKey access.
+	private static final PotionEffectType BAD_OMEN = PotionEffectType.getByKey(NamespacedKey.minecraft("bad_omen"));
+	private static final PotionEffectType BLINDNESS = PotionEffectType.getByKey(NamespacedKey.minecraft("blindness"));
+	private static final PotionEffectType NAUSEA = PotionEffectType.getByKey(NamespacedKey.minecraft("nausea")); // Formerly CONFUSION
+	private static final PotionEffectType INSTANT_DAMAGE = PotionEffectType.getByKey(NamespacedKey.minecraft("instant_damage")); // Formerly HARM
+	private static final PotionEffectType HUNGER = PotionEffectType.getByKey(NamespacedKey.minecraft("hunger"));
+	private static final PotionEffectType MINING_FATIGUE = PotionEffectType.getByKey(NamespacedKey.minecraft("mining_fatigue")); // Formerly SLOW_DIGGING
+	private static final PotionEffectType UNLUCK = PotionEffectType.getByKey(NamespacedKey.minecraft("unluck"));
+	private static final PotionEffectType WEAKNESS = PotionEffectType.getByKey(NamespacedKey.minecraft("weakness"));
+	private static final PotionEffectType POISON = PotionEffectType.getByKey(NamespacedKey.minecraft("poison"));
 
 	public DamageManagement() {
 		disablePotions = Main.plugin.getConfig().getBoolean("disablePotions");
 		disableSelf = Main.plugin.getConfig().getBoolean("playerDamageSelf");
 	}
 
-	/**
-	 * This is used to cancel any events which would cause 2 players of the same
-	 * team to damage each other
-	 *
-	 * @param e the damage event
-	 */
 	@EventHandler(ignoreCancelled = true, priority = EventPriority.LOWEST)
 	public void onDamage(EntityDamageByEntityEvent e) {
+		if (!(e.getEntity() instanceof Player)) return;
 
-		if (!(e.getEntity() instanceof Player)) {
-			return;
-		}
 		Team temp = Team.getTeam((Player) e.getEntity());
-		if (temp == null) {
-			return;
-		}
+		if (temp == null) return;
+
 		try {
 			if (e.getDamager() instanceof Player) {
-				if (!Objects.requireNonNull(Team.getTeam((Player) e.getDamager())).canDamage(temp,
-						(Player) e.getDamager())) {
-					// they are on the same team
+				if (!Objects.requireNonNull(Team.getTeam((Player) e.getDamager())).canDamage(temp, (Player) e.getDamager())) {
 					e.setCancelled(true);
 				}
 			} else if (e.getDamager() instanceof Projectile && !(e.getDamager() instanceof ThrownPotion)) {
 				Projectile arrow = (Projectile) e.getDamager();
 				ProjectileSource source = arrow.getShooter();
-				if (source instanceof Player
-						&& !Objects.requireNonNull(Team.getTeam((Player) source)).canDamage(temp, (Player) source)) {
-					// they are on the same team
-					if (disableSelf && source == e.getEntity()) {
-						return;
-					}
+				if (source instanceof Player && !Objects.requireNonNull(Team.getTeam((Player) source)).canDamage(temp, (Player) source)) {
+					if (disableSelf && source == e.getEntity()) return;
 					e.setCancelled(true);
 				}
 			} else if (e.getDamager() instanceof ThrownPotion && disablePotions) {
 				ThrownPotion arrow = (ThrownPotion) e.getDamager();
 				ProjectileSource source = arrow.getShooter();
-				if (source instanceof Player
-						&& !Objects.requireNonNull(Team.getTeam((Player) source)).canDamage(temp, (Player) source)) {
-					// they are on the same team
+				if (source instanceof Player && !Objects.requireNonNull(Team.getTeam((Player) source)).canDamage(temp, (Player) source)) {
 					e.setCancelled(true);
 				}
 			} else if (e.getDamager() instanceof TNTPrimed) {
 				TNTPrimed explosive = (TNTPrimed) e.getDamager();
 				Entity source = explosive.getSource();
-				if (source instanceof Player
-						&& !Objects.requireNonNull(Team.getTeam((Player) source)).canDamage(temp, (Player) source)) {
-					// they are on the same team
-					if (disableSelf && source == e.getEntity()) {
-						return;
-					}
+				if (source instanceof Player && !Objects.requireNonNull(Team.getTeam((Player) source)).canDamage(temp, (Player) source)) {
+					if (disableSelf && source == e.getEntity()) return;
 					e.setCancelled(true);
 				}
 			}
-		} catch (NullPointerException ex) {
-			// thrown if the players team is null
-		}
+		} catch (NullPointerException ignored) {}
 	}
 
-	/**
-	 * This method is used to detect if a negative potion is being thrown at members
-	 * of the same team
-	 *
-	 * @param e the potion splash event
-	 */
 	@EventHandler(ignoreCancelled = true)
 	public void onPotion(PotionSplashEvent e) {
-		if (!(e.getEntity().getShooter() instanceof Player) || !disablePotions) {
-			return;
-		}
+		if (!(e.getEntity().getShooter() instanceof Player) || !disablePotions) return;
+
 		Player thrower = (Player) e.getEntity().getShooter();
 		Team team = Team.getTeam(thrower);
-		// thrower is not in team
-		if (team == null) {
-			return;
-		}
+		if (team == null) return;
 
 		Collection<PotionEffect> effects = e.getPotion().getEffects();
 		boolean cancel = false;
+
+		// Check if any of the potion's effects are considered harmful.
 		for (PotionEffect effect : effects) {
-			String type = effect.getType().getName();
-			if (type.equals(PotionEffectType.BAD_OMEN.getName()) || type.equals(PotionEffectType.BLINDNESS.getName())
-					|| type.equals(PotionEffectType.CONFUSION.getName()) || type.equals(PotionEffectType.HARM.getName())
-					|| type.equals(PotionEffectType.HUNGER.getName())
-					|| type.equals(PotionEffectType.SLOW_DIGGING.getName())
-					|| type.equals(PotionEffectType.UNLUCK.getName())
-					|| type.equals(PotionEffectType.WEAKNESS.getName())
-					|| type.equals(PotionEffectType.POISON.getName())) {
+			PotionEffectType type = effect.getType();
+			if (type.equals(BAD_OMEN) || type.equals(BLINDNESS) || type.equals(NAUSEA) || type.equals(INSTANT_DAMAGE)
+					|| type.equals(HUNGER) || type.equals(MINING_FATIGUE) || type.equals(UNLUCK)
+					|| type.equals(WEAKNESS) || type.equals(POISON)) {
 				cancel = true;
+				break; // Found a harmful effect, no need to check further.
 			}
 		}
 
 		if (cancel) {
-			Collection<LivingEntity> affectedEntities = e.getAffectedEntities();
-			for (LivingEntity entity : affectedEntities) {
+			for (LivingEntity entity : e.getAffectedEntities()) {
 				try {
-					if (entity instanceof Player
-							&& !Objects.requireNonNull(Team.getTeam((Player) entity)).canDamage(team, thrower)) {
-						if (disableSelf && entity == thrower) {
-							continue;
-						}
-						e.setIntensity(entity, 0);
+					if (entity instanceof Player && !Objects.requireNonNull(Team.getTeam((Player) entity)).canDamage(team, thrower)) {
+						if (disableSelf && entity == thrower) continue;
+						e.setIntensity(entity, 0); // Cancel the effect for this friendly player.
 					}
-				} catch (NullPointerException ex) {
-					// thrown if the players team is null
-				}
+				} catch (NullPointerException ignored) {}
 			}
 		}
 	}

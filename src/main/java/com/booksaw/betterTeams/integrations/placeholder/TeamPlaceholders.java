@@ -1,17 +1,16 @@
 package com.booksaw.betterTeams.integrations.placeholder;
 
+import java.time.Duration;
 import com.booksaw.betterTeams.Team;
 import com.booksaw.betterTeams.TeamPlayer;
 import com.booksaw.betterTeams.Utils;
 import com.booksaw.betterTeams.message.MessageManager;
 import com.booksaw.betterTeams.util.Cache;
-import me.clip.placeholderapi.expansion.PlaceholderExpansion;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
 import org.jetbrains.annotations.NotNull;
-
-import java.time.Duration;
+import me.clip.placeholderapi.expansion.PlaceholderExpansion;
 
 /**
  * This class is used to set the placeholder values for placeholder API
