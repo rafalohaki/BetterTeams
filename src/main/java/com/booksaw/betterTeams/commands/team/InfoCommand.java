@@ -35,67 +35,57 @@ public class InfoCommand extends SubCommand {
 		this.parentCommand = parentCommand;
 	}
 
-	public static List<Component> getInfoComponents(Team team) {
-		List<Component> infoMessages = new ArrayList<>();
+	public static List<@Nullable String> getInfoMessages(Team team) {
+		List<String> infoMessages = new ArrayList<>();
 
-		addIfNotNull(infoMessages, MessageManager.getMessage("info.name", team.getDisplayName()));
-
+		infoMessages.add(MessageManager.getMessage("info.name", team.getDisplayName()));
 		if (team.getDescription() != null && !team.getDescription().isEmpty()) {
-			addIfNotNull(infoMessages, MessageManager.getMessage("info.description", team.getDescription()));
+			infoMessages.add(MessageManager.getMessage("info.description", team.getDescription()));
 		}
 
-		addIfNotNull(infoMessages, MessageManager.getMessage("info.open", team.isOpen()));
-		addIfNotNull(infoMessages, MessageManager.getMessage("info.score", team.getScore()));
-		addIfNotNull(infoMessages, MessageManager.getMessage("info.money", team.getBalance()));
-		addIfNotNull(infoMessages, MessageManager.getMessage("info.level", team.getLevel()));
-		addIfNotNull(infoMessages, MessageManager.getMessage("info.tag", team.getTag()));
-
+		infoMessages.add(MessageManager.getMessage("info.open", team.isOpen()));
+		infoMessages.add(MessageManager.getMessage("info.score", team.getScore()));
+		infoMessages.add(MessageManager.getMessage("info.money", team.getBalance()));
+		infoMessages.add(MessageManager.getMessage("info.level", team.getLevel()));
+		infoMessages.add(MessageManager.getMessage("info.tag", team.getTag()));
+		
 		if (Main.plugin.getConfig().getBoolean("anchor.enable")) {
-			String anchor = MessageManager.getMessage("info.anchor", team.isAnchored());
-			addIfNotNull(infoMessages, anchor);
+			infoMessages.add(MessageManager.getMessage("info.anchor", team.isAnchored()));
 		}
 
-		addIfNotNull(infoMessages, getAlliesMessage(team));
-		addIfNotNull(infoMessages, getPlayerList(team, PlayerRank.OWNER));
-		addIfNotNull(infoMessages, getPlayerList(team, PlayerRank.ADMIN));
-		addIfNotNull(infoMessages, getPlayerList(team, PlayerRank.DEFAULT));
+		infoMessages.add(getAlliesMessage(team));
+		infoMessages.add(getPlayerList(team, PlayerRank.OWNER));
+		infoMessages.add(getPlayerList(team, PlayerRank.ADMIN));
+		infoMessages.add(getPlayerList(team, PlayerRank.DEFAULT));
 
 		return infoMessages;
 	}
 
-	private static void addIfNotNull(List<Component> list, @Nullable String legacy) {
-		if (legacy != null && !legacy.isEmpty()) {
-			list.add(ColorConversionUtils.fromLegacy(legacy));
-		}
-	}
-
-
+	/**
+	 * NAPRAWIONE: Używa Adventure API zamiast deprecated ChatColor.WHITE
+	 */
 	private static String getSetComponentMessage(SetTeamComponent<UUID> teams, final String referenceMessage) {
-		if (teams.get().isEmpty()) {
-			return null;
-		}
-		
-		List<String> teamNames = new ArrayList<>();
+		StringBuilder tmp = new StringBuilder();
 		for (UUID uuid : teams.get()) {
 			Team ally = Team.getTeam(uuid);
+
 			if (ally == null) {
 				Main.plugin.getLogger().warning("Unable to locate team with UUID: " + uuid);
 				continue;
 			}
-			teamNames.add(ally.getDisplayName());
+
+			// POPRAWIONE: Adventure API zamiast ChatColor.WHITE
+			String whiteColor = ColorConversionUtils.toLegacy(
+				Component.text("", NamedTextColor.WHITE)
+			);
+			tmp.append(ally.getDisplayName()).append(whiteColor).append(", ");
 		}
-		
-		if (teamNames.isEmpty()) {
-			return null;
+
+		if (tmp.length() > 2) {
+			return MessageManager.getMessage(referenceMessage, tmp.substring(0, tmp.length() - 2));
 		}
-		
-		// Łączenie nazw drużyn z białymi separatorami
-		String joinedNames = String.join(
-			ColorConversionUtils.toLegacy(Component.text(", ", NamedTextColor.WHITE)), 
-			teamNames
-		);
-		
-		return MessageManager.getMessage(referenceMessage, joinedNames);
+
+		return null;
 	}
 
 	private static String getAlliesMessage(Team team) {
@@ -162,14 +152,16 @@ public class InfoCommand extends SubCommand {
 			}
 		}
 		return new CommandResponse("info.needTeam");
-
 	}
 
 	private void displayTeamInfo(CommandSender sender, Team team) {
-		List<Component> toDisplay = getInfoComponents(team);
+		List<String> toDisplay = getInfoMessages(team);
 
-		for (Component message : toDisplay) {
-			MessageManager.sendFullMessage(sender, message);
+		for (String str : toDisplay) {
+			if (str == null || str.isEmpty()) {
+				continue;
+			}
+			MessageManager.sendFullMessage(sender, str, true);
 		}
 	}
 
@@ -205,10 +197,7 @@ public class InfoCommand extends SubCommand {
 
 	@Override
 	public void onTabComplete(List<String> options, CommandSender sender, String label, String[] args) {
-
 		addTeamStringList(options, (args.length == 0) ? "" : args[0]);
 		addPlayerStringList(options, (args.length == 0) ? "" : args[0]);
-
 	}
-
 }
