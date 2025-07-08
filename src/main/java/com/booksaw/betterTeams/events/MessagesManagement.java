@@ -37,7 +37,7 @@ public class MessagesManagement implements Listener {
 		}
 
 		Message message;
-		String coloredTeamName = team.getColor() + team.getName() + ChatColor.RESET;
+               String coloredTeamName = team.getChatColor() + team.getName() + ChatColor.RESET;
 
 		if (playerName != null) {
 			message = new ReferencedFormatMessage(type.messageKey, playerName, coloredTeamName);

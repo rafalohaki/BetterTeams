@@ -5,6 +5,7 @@ import com.booksaw.betterTeams.Team;
 import com.booksaw.betterTeams.commands.presets.TeamSelectSubCommand;
 import org.bukkit.ChatColor;
 import org.bukkit.command.CommandSender;
+import com.booksaw.betterTeams.util.ColorConversionUtils;
 
 import java.util.Arrays;
 import java.util.List;
@@ -32,7 +33,7 @@ public class ColorTeama extends TeamSelectSubCommand {
 			return new CommandResponse("color.banned");
 		}
 
-		team.setColor(color);
+               team.setColor(ColorConversionUtils.toNamed(color));
 
 		return new CommandResponse(true, "admin.color.success");
 	}

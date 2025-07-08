@@ -13,6 +13,6 @@ public class ColorPlaceholderProvider implements IndividualTeamPlaceholderProvid
 
 	@Override
 	public String getPlaceholderForTeam(Team team) {
-		return team.getColor().toString();
-	}
+               return team.getChatColor().toString();
+       }
 }

@@ -133,8 +133,8 @@ public class ChatManagement implements Listener {
 			switch (this) {
 				case NAME:
 					return MessageManager.getMessage(p, "prefixSyntax", team.getDisplayName(), format);
-				case TAG:
-					return MessageManager.getMessage(p, "prefixSyntax", team.getColor() + team.getTag(), format);
+                               case TAG:
+                                       return MessageManager.getMessage(p, "prefixSyntax", team.getChatColor() + team.getTag(), format);
 				default:
 					return format;
 			}
