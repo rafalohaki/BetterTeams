@@ -1,22 +1,19 @@
 package com.booksaw.betterTeams.message;
 
+import static java.util.Objects.requireNonNull;
+import java.util.Collection;
+import com.booksaw.betterTeams.Team;
+import com.booksaw.betterTeams.TeamPlayer;
+import com.booksaw.betterTeams.text.Formatter;
+import com.booksaw.betterTeams.util.ColorConversionUtils;
+import com.booksaw.betterTeams.util.ComponentUtil;
+import com.booksaw.betterTeams.util.StringUtil;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
-
-import com.booksaw.betterTeams.Team;
-import com.booksaw.betterTeams.TeamPlayer;
-import com.booksaw.betterTeams.text.Formatter;
-import com.booksaw.betterTeams.util.ComponentUtil;
-import com.booksaw.betterTeams.util.StringUtil;
-
 import lombok.Getter;
 import net.kyori.adventure.text.Component;
-
-import static java.util.Objects.requireNonNull;
-
-import java.util.Collection;
 
 public class ChatMessage extends StaticComponentHolderMessage {
 
@@ -59,7 +56,9 @@ public class ChatMessage extends StaticComponentHolderMessage {
 		requireNonNull(message, "Team chat message cannot be null.");
 		String syntax = requireNonNull(team.getTeamChatSyntax(teamPlayer), "Team chat syntax could not be found.");
 		
-		Component teamPreMessage = Formatter.absolute().process(StringUtil.setPlaceholders(syntax, (prefix == null ? "" : prefix) + player.getDisplayName()));
+		// Używamy Adventure API zamiast deprecated getDisplayName()
+		String playerDisplayName = getPlayerDisplayName(player);
+		Component teamPreMessage = Formatter.absolute().process(StringUtil.setPlaceholders(syntax, (prefix == null ? "" : prefix) + playerDisplayName));
 		Component playerMessage = Formatter.player(player).process(message);
 		Component spyPreMessage = Formatter.absolute().process(MessageManager.getMessage(player, "spy.team", team.getName(), player.getName()));
 		return new ChatMessage(team, teamPlayer, ComponentUtil.setPlaceholders(teamPreMessage, playerMessage, "{1}"), ComponentUtil.setPlaceholders(spyPreMessage, playerMessage, "{2}"));
@@ -76,7 +75,9 @@ public class ChatMessage extends StaticComponentHolderMessage {
 		requireNonNull(message, "Team chat message cannot be null.");
 		String syntax = requireNonNull(team.getAllyChatSyntax(teamPlayer), "Team chat syntax could not be found.");
 
-		Component allyPreMessage = Formatter.absolute().process(StringUtil.setPlaceholders(syntax, team.getDisplayName(), (prefix == null ? "" : prefix) + player.getDisplayName()));
+		// Używamy Adventure API zamiast deprecated getDisplayName()
+		String playerDisplayName = getPlayerDisplayName(player);
+		Component allyPreMessage = Formatter.absolute().process(StringUtil.setPlaceholders(syntax, team.getDisplayName(), (prefix == null ? "" : prefix) + playerDisplayName));
 		Component playerMessage = Formatter.player(player).process(message);
 		Component spyPreMessage = Formatter.absolute().process(MessageManager.getMessage(player, "spy.ally", team.getName(), player.getName()));
 		return new ChatMessage(team, teamPlayer, ComponentUtil.setPlaceholders(allyPreMessage, playerMessage, "{2}"), ComponentUtil.setPlaceholders(spyPreMessage, playerMessage, "{2}"));
@@ -93,10 +94,24 @@ public class ChatMessage extends StaticComponentHolderMessage {
 		requireNonNull(message, "Team chat message cannot be null.");
 		requireNonNull(syntax, "Team chat syntax cannot be null.");
 
-		Component teamPreMessage = Formatter.absolute().process(StringUtil.setPlaceholders(syntax, (prefix == null ? "" : prefix) + player.getDisplayName()));
+		// Używamy Adventure API zamiast deprecated getDisplayName()
+		String playerDisplayName = getPlayerDisplayName(player);
+		Component teamPreMessage = Formatter.absolute().process(StringUtil.setPlaceholders(syntax, (prefix == null ? "" : prefix) + playerDisplayName));
 		Component playerMessage = Formatter.player(player).process(message);
 		Component spyPreMessage = Formatter.absolute().process(MessageManager.getMessage(player, "spy.team", team.getName(), player.getName()));
 		return new ChatMessage(team, teamPlayer, ComponentUtil.setPlaceholders(teamPreMessage, playerMessage, "{1}"), ComponentUtil.setPlaceholders(spyPreMessage, playerMessage, "{2}"));
+	}
+
+	/**
+	 * Pobiera display name gracza używając Adventure API zamiast deprecated getDisplayName()
+	 * @param player gracz
+	 * @return display name jako String dla kompatybilności z istniejącym kodem
+	 */
+	private static String getPlayerDisplayName(Player player) {
+		// Używamy player.displayName() (Adventure API) zamiast deprecated getDisplayName()
+		Component displayNameComponent = player.displayName();
+		// Konwertujemy Component na legacy string dla kompatybilności z StringUtil.setPlaceholders()
+		return ColorConversionUtils.toLegacy(displayNameComponent);
 	}
 
 	@Override

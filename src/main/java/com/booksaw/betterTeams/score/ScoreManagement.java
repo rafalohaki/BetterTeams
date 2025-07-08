@@ -13,7 +13,7 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.scheduler.BukkitRunnable;
-import org.bukkit.scheduler.BukkitScheduler;
+import org.bukkit.scheduler.BukkitTask;
 import me.clip.placeholderapi.PlaceholderAPI;
 
 public class ScoreManagement implements Listener {
@@ -21,6 +21,7 @@ public class ScoreManagement implements Listener {
 	private final List<Date> purges;
 	private int nextPurge;
 	private boolean run;
+	private BukkitTask scheduledTask; // Dodajemy referencję do task dla proper cleanup
 
 	public ScoreManagement() {
 		purges = new ArrayList<>();
@@ -33,13 +34,16 @@ public class ScoreManagement implements Listener {
 					Main.plugin.getLogger().severe("The autopurge value " + str
 							+ " is not of the correct format, it should be of the format 'dateofMonth:hour', if your format looks like this, make sure you have surrounded the message in single quotes (ie - '1:6')");
 				} else {
-					Date temp = new Date(Integer.parseInt(split[0]), Integer.parseInt(split[1]));
-					purges.add(temp);
-					if (nextPurge == -1 && temp.isAfterNow()) {
-						nextPurge = purges.indexOf(temp);
+					try {
+						Date temp = new Date(Integer.parseInt(split[0]), Integer.parseInt(split[1]));
+						purges.add(temp);
+						if (nextPurge == -1 && temp.isAfterNow()) {
+							nextPurge = purges.indexOf(temp);
+						}
+					} catch (NumberFormatException e) {
+						Main.plugin.getLogger().severe("Invalid number format in autopurge value: " + str);
 					}
 				}
-
 			});
 		}
 		run = true;
@@ -50,74 +54,112 @@ public class ScoreManagement implements Listener {
 
 		// if there are actually purges
 		if (!purges.isEmpty()) {
-			sched();
+			scheduleAutoPurge();
 		}
-
 	}
 
 	/**
-	 * This class is used to schedule events
+	 * Scheduluje auto-purge używając nowoczesnego Bukkit Scheduler API
 	 */
-	private void sched() {
-		if (!Main.plugin.isEnabled()) {
+	private void scheduleAutoPurge() {
+		// Sprawdź czy plugin jest bezpieczny do schedulowania
+		if (!Main.isPluginSafe()) {
 			return;
 		}
 
-		BukkitScheduler scheduler = Main.plugin.getServer().getScheduler();
-		scheduler.scheduleSyncRepeatingTask(Main.plugin, new BukkitRunnable() {
+		// Używamy runTaskTimer() zamiast deprecated scheduleSyncRepeatingTask()
+		scheduledTask = new BukkitRunnable() {
 			@Override
 			public void run() {
-				// If the plugin is disabled while this task is running, cancel it.
-				if (!Main.plugin.isEnabled()) {
-					this.cancel();
+				// Safety check - jeśli plugin został wyłączony, zatrzymaj task
+				if (!Main.isPluginSafe()) {
+					cancel();
 					return;
 				}
 				
-				if (purges.get(nextPurge).isNow()) {
-					if (run) {
-						return;
-					}
-
-					run = true;
-					Team.getTeamManager().purgeTeams(true, true);
-					if (nextPurge + 1 < purges.size()) {
-						nextPurge++;
-					} else {
-						nextPurge = 0;
-					}
-					return;
-				}
-				// clean pass so it can reset the tracker
-				run = false;
+				handleAutoPurgeCheck();
 			}
-		}, 0L, 20 * 60L);
+		}.runTaskTimer(Main.plugin, 0L, 20 * 60L); // Co minutę (20 ticks * 60 = 1200 ticks)
+	}
 
+	/**
+	 * Obsługuje sprawdzanie auto-purge w nowoczesny sposób
+	 */
+	private void handleAutoPurgeCheck() {
+		if (purges.isEmpty() || nextPurge >= purges.size()) {
+			return;
+		}
+
+		Date currentPurge = purges.get(nextPurge);
+		if (currentPurge.isNow()) {
+			if (run) {
+				return; // Już wykonywane
+			}
+
+			run = true;
+			
+			// Wykonaj purge asynchronicznie aby nie blokować main thread
+			Bukkit.getScheduler().runTask(Main.plugin, () -> {
+				if (Main.isPluginSafe()) {
+					Team.getTeamManager().purgeTeams(true, true);
+				}
+			});
+			
+			// Przejdź do następnego purge
+			if (nextPurge + 1 < purges.size()) {
+				nextPurge++;
+			} else {
+				nextPurge = 0;
+			}
+			return;
+		}
+		
+		// Clean pass - resetuj tracker
+		run = false;
+	}
+
+	/**
+	 * Zatrzymuje scheduled task (powinno być wywołane w onDisable)
+	 */
+	public void shutdown() {
+		if (scheduledTask != null && !scheduledTask.isCancelled()) {
+			scheduledTask.cancel();
+			scheduledTask = null;
+		}
 	}
 
 	@EventHandler
 	public void onPurge(PostPurgeEvent e) {
-		if (!Main.plugin.isEnabled()) {
+		if (!Main.isPluginSafe()) {
 			return;
 		}
 		
-		Bukkit.getScheduler().runTask(Main.plugin, () -> Main.plugin.getConfig().getStringList("purgeCommands").forEach(cmd -> {
-			if (Main.placeholderAPI) {
-				cmd = PlaceholderAPI.setPlaceholders(null, cmd);
-			}
-
-			Bukkit.dispatchCommand(Bukkit.getConsoleSender(), cmd);
-		}));
+		// Bezpieczne wykonanie purge commands
+		Bukkit.getScheduler().runTask(Main.plugin, () -> {
+			Main.plugin.getConfig().getStringList("purgeCommands").forEach(cmd -> {
+				try {
+					if (Main.placeholderAPI) {
+						cmd = PlaceholderAPI.setPlaceholders(null, cmd);
+					}
+					Bukkit.dispatchCommand(Bukkit.getConsoleSender(), cmd);
+				} catch (Exception ex) {
+					Main.plugin.getLogger().warning("Failed to execute purge command: " + cmd + " - " + ex.getMessage());
+				}
+			});
+		});
 	}
 
 	@EventHandler
 	public void onKill(PlayerDeathEvent e) {
 		Player killed = e.getEntity();
-		// score decreases
+		
+		// Score decreases for killed player
 		Team killedTeam = Team.getTeam(killed);
 		if (killedTeam != null) {
 			death(killed, killedTeam);
 		}
 
+		// Check if there's a killer
 		if (e.getEntity().getKiller() == null) {
 			return;
 		}
@@ -127,44 +169,44 @@ public class ScoreManagement implements Listener {
 		if (killerTeam == null) {
 			return;
 		}
+		
 		kill(killer, killed, killerTeam, killedTeam);
-
 	}
 
-	public void kill(Player source, Player target, Team souceTeam, Team targetTeam) {
-
+	public void kill(Player source, Player target, Team sourceTeam, Team targetTeam) {
 		int scoreForKill;
 
 		if (ScoreChange.isSpam(ChangeType.KILL, source, target)) {
 			scoreForKill = Main.plugin.getConfig().getInt("events.kill.spam");
-
 		} else {
 			new ScoreChange(ChangeType.KILL, source, target);
 			scoreForKill = Main.plugin.getConfig().getInt("events.kill.score");
 		}
 
-		if (souceTeam.equals(targetTeam)) {
-			souceTeam.setScore(souceTeam.getScore() - scoreForKill);
+		// Friendly fire penalty vs normal kill reward
+		if (sourceTeam.equals(targetTeam)) {
+			sourceTeam.setScore(sourceTeam.getScore() - scoreForKill);
 		} else {
-			souceTeam.setScore(souceTeam.getScore() + scoreForKill);
+			sourceTeam.setScore(sourceTeam.getScore() + scoreForKill);
 		}
 	}
 
-	public void death(Player source, Team souceTeam) {
-
+	public void death(Player source, Team sourceTeam) {
 		int scoreForDeath;
 
 		if (ScoreChange.isSpam(ChangeType.DEATH, source)) {
 			scoreForDeath = Main.plugin.getConfig().getInt("events.death.spam");
-
 		} else {
 			new ScoreChange(ChangeType.DEATH, source);
 			scoreForDeath = Main.plugin.getConfig().getInt("events.death.score");
 		}
 
-		souceTeam.setScore(souceTeam.getScore() + scoreForDeath);
+		sourceTeam.setScore(sourceTeam.getScore() + scoreForDeath);
 	}
 
+	/**
+	 * Inner class representing a date/time for auto-purge scheduling
+	 */
 	private static class Date {
 		private final int date, hours;
 
@@ -174,8 +216,9 @@ public class ScoreManagement implements Listener {
 		}
 
 		/**
-		 * @param date the date to check if this date is before
-		 * @return if the event is before now
+		 * Checks if this date is before the given date
+		 * @param date the date to check against
+		 * @return true if this date is before the given date
 		 */
 		public boolean isBefore(Date date) {
 			if (date.date < this.date) {
@@ -188,7 +231,8 @@ public class ScoreManagement implements Listener {
 		}
 
 		/**
-		 * @return if the event is now
+		 * Checks if the current time matches this date
+		 * @return true if it's time for this scheduled event
 		 */
 		public boolean isNow() {
 			LocalDateTime now = LocalDateTime.now();
@@ -196,9 +240,8 @@ public class ScoreManagement implements Listener {
 		}
 
 		/**
-		 * Used to check if the date is after the current time
-		 *
-		 * @return If the date is after the current time
+		 * Checks if this date is after the current time
+		 * @return true if this date is in the future
 		 */
 		public boolean isAfterNow() {
 			LocalDateTime now = LocalDateTime.now();
