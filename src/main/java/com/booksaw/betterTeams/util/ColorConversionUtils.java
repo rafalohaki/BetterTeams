@@ -10,307 +10,178 @@ import net.kyori.adventure.text.format.TextColor;
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 
 /**
- * Utility class for converting between different color APIs in Minecraft ecosystem.
- * Updated for Paper 1.21.7 with Adventure API support, eliminating Bungee API dependencies.
+ * Clean utility for color conversion between ChatColor and Adventure API.
+ * Focused on Paper 1.21.7+ with minimal compatibility overhead.
  * 
  * @author BetterTeams
  * @since 4.13.4
  */
-@SuppressWarnings("deprecation") // ChatColor jest potrzebny dla kompatybilności
+@SuppressWarnings("deprecation")
 public final class ColorConversionUtils {
     
-    // Używamy HashMap zamiast Map.of() aby uniknąć limitu 10 argumentów
-    private static final Map<ChatColor, NamedTextColor> CHAT_TO_TEXT = new HashMap<>();
-    private static final Map<NamedTextColor, ChatColor> TEXT_TO_CHAT = new HashMap<>();
+    private static final Map<ChatColor, NamedTextColor> CHAT_TO_NAMED = new HashMap<>();
+    private static final Map<NamedTextColor, ChatColor> NAMED_TO_CHAT = new HashMap<>();
     
-    /** Default fallback color when conversion fails or input is null */
-    private static final NamedTextColor DEFAULT_NAMED_COLOR = NamedTextColor.WHITE;
-    private static final ChatColor DEFAULT_CHAT_COLOR = ChatColor.WHITE;
-
     static {
-        // Inicjalizacja mapowań kolorów
-        initializeColorMappings();
+        // 16 podstawowych kolorów Minecraft
+        map(ChatColor.BLACK, NamedTextColor.BLACK);
+        map(ChatColor.DARK_BLUE, NamedTextColor.DARK_BLUE);
+        map(ChatColor.DARK_GREEN, NamedTextColor.DARK_GREEN);
+        map(ChatColor.DARK_AQUA, NamedTextColor.DARK_AQUA);
+        map(ChatColor.DARK_RED, NamedTextColor.DARK_RED);
+        map(ChatColor.DARK_PURPLE, NamedTextColor.DARK_PURPLE);
+        map(ChatColor.GOLD, NamedTextColor.GOLD);
+        map(ChatColor.GRAY, NamedTextColor.GRAY);
+        map(ChatColor.DARK_GRAY, NamedTextColor.DARK_GRAY);
+        map(ChatColor.BLUE, NamedTextColor.BLUE);
+        map(ChatColor.GREEN, NamedTextColor.GREEN);
+        map(ChatColor.AQUA, NamedTextColor.AQUA);
+        map(ChatColor.RED, NamedTextColor.RED);
+        map(ChatColor.LIGHT_PURPLE, NamedTextColor.LIGHT_PURPLE);
+        map(ChatColor.YELLOW, NamedTextColor.YELLOW);
+        map(ChatColor.WHITE, NamedTextColor.WHITE);
     }
     
-    /**
-     * Inicjalizuje mapowania kolorów - rozwiązuje problem z Map.of() limit
-     */
-    private static void initializeColorMappings() {
-        // Wszystkie 16 kolorów Minecraft
-        addColorMapping(ChatColor.BLACK, NamedTextColor.BLACK);
-        addColorMapping(ChatColor.DARK_BLUE, NamedTextColor.DARK_BLUE);
-        addColorMapping(ChatColor.DARK_GREEN, NamedTextColor.DARK_GREEN);
-        addColorMapping(ChatColor.DARK_AQUA, NamedTextColor.DARK_AQUA);
-        addColorMapping(ChatColor.DARK_RED, NamedTextColor.DARK_RED);
-        addColorMapping(ChatColor.DARK_PURPLE, NamedTextColor.DARK_PURPLE);
-        addColorMapping(ChatColor.GOLD, NamedTextColor.GOLD);
-        addColorMapping(ChatColor.GRAY, NamedTextColor.GRAY);
-        addColorMapping(ChatColor.DARK_GRAY, NamedTextColor.DARK_GRAY);
-        addColorMapping(ChatColor.BLUE, NamedTextColor.BLUE);
-        addColorMapping(ChatColor.GREEN, NamedTextColor.GREEN);
-        addColorMapping(ChatColor.AQUA, NamedTextColor.AQUA);
-        addColorMapping(ChatColor.RED, NamedTextColor.RED);
-        addColorMapping(ChatColor.LIGHT_PURPLE, NamedTextColor.LIGHT_PURPLE);
-        addColorMapping(ChatColor.YELLOW, NamedTextColor.YELLOW);
-        addColorMapping(ChatColor.WHITE, NamedTextColor.WHITE);
+    private static void map(ChatColor chat, NamedTextColor named) {
+        CHAT_TO_NAMED.put(chat, named);
+        NAMED_TO_CHAT.put(named, chat);
     }
+
+    private ColorConversionUtils() {}
+
+    // === PODSTAWOWE KONWERSJE ===
     
     /**
-     * Dodaje bidirektional mapping między kolorami
-     */
-    private static void addColorMapping(ChatColor chatColor, NamedTextColor namedColor) {
-        CHAT_TO_TEXT.put(chatColor, namedColor);
-        TEXT_TO_CHAT.put(namedColor, chatColor);
-    }
-
-    private ColorConversionUtils() {
-        throw new UnsupportedOperationException("Utility class cannot be instantiated");
-    }
-
-    // === ZACHOWANE METODY - Pełna kompatybilność z Team.java ===
-
-    /**
-     * Converts a Bukkit ChatColor to Adventure NamedTextColor.
+     * ChatColor → NamedTextColor
      */
     public static NamedTextColor toNamed(ChatColor chatColor) {
-        if (chatColor == null) {
-            return DEFAULT_NAMED_COLOR;
-        }
-        return CHAT_TO_TEXT.getOrDefault(chatColor, DEFAULT_NAMED_COLOR);
+        return CHAT_TO_NAMED.getOrDefault(chatColor, NamedTextColor.WHITE);
     }
 
     /**
-     * Converts a Bukkit ChatColor to Adventure NamedTextColor with strict validation.
+     * NamedTextColor → ChatColor
      */
-    public static NamedTextColor toNamed(ChatColor chatColor, boolean strict) {
-        if (strict && chatColor == null) {
-            throw new IllegalArgumentException("ChatColor cannot be null in strict mode");
-        }
-        
-        if (chatColor == null) {
-            return DEFAULT_NAMED_COLOR;
-        }
-        
-        NamedTextColor result = CHAT_TO_TEXT.get(chatColor);
-        if (strict && result == null) {
-            throw new IllegalArgumentException("Unknown ChatColor: " + chatColor);
-        }
-        
-        return result != null ? result : DEFAULT_NAMED_COLOR;
+    public static ChatColor toChat(NamedTextColor namedColor) {
+        return NAMED_TO_CHAT.getOrDefault(namedColor, ChatColor.WHITE);
     }
 
     /**
-     * Converts an Adventure NamedTextColor to Bukkit ChatColor.
+     * TextColor → ChatColor (z obsługą hex)
      */
-    public static ChatColor toChat(NamedTextColor color) {
-        if (color == null) {
-            return DEFAULT_CHAT_COLOR;
+    public static ChatColor toChat(TextColor textColor) {
+        if (textColor instanceof NamedTextColor) {
+            return toChat((NamedTextColor) textColor);
         }
-        return TEXT_TO_CHAT.getOrDefault(color, DEFAULT_CHAT_COLOR);
+        return findClosestChatColor(textColor);
     }
 
     /**
-     * Converts an Adventure TextColor to Bukkit ChatColor.
+     * TextColor → NamedTextColor
      */
-    public static ChatColor toChat(TextColor color) {
-        if (color == null) {
-            return DEFAULT_CHAT_COLOR;
+    public static NamedTextColor toNamed(TextColor textColor) {
+        if (textColor instanceof NamedTextColor) {
+            return (NamedTextColor) textColor;
         }
-        
-        if (color instanceof NamedTextColor) {
-            return toChat((NamedTextColor) color);
-        }
-        
-        return findClosestChatColor(color);
+        return toNamed(toChat(textColor));
+    }
+
+    // === ADVENTURE API METHODS ===
+    
+    /**
+     * Tworzy kolorowy Component
+     */
+    public static Component text(String text, NamedTextColor color) {
+        return Component.text(text, color);
     }
 
     /**
-     * Converts an Adventure TextColor to NamedTextColor.
+     * Tworzy kolorowy Component z TextColor
      */
-    public static NamedTextColor toNamed(TextColor color) {
-        if (color == null) {
-            return DEFAULT_NAMED_COLOR;
-        }
-        
-        if (color instanceof NamedTextColor) {
-            return (NamedTextColor) color;
-        }
-        
-        return toNamed(toChat(color));
+    public static Component text(String text, TextColor color) {
+        return Component.text(text, color);
     }
 
     /**
-     * Creates a NamedTextColor from a color character.
+     * Tworzy Component z hex kolorem
      */
-    public static NamedTextColor fromChar(char c) {
-        ChatColor chatColor = ChatColor.getByChar(c);
-        return toNamed(chatColor);
-    }
-
-    /**
-     * Returns the character representation of a NamedTextColor.
-     */
-    public static char toChar(NamedTextColor color) {
-        if (color == null) {
-            return 'f'; // white
-        }
-        char result = toChat(color).getChar();
-        return result;
-    }
-
-    // === METODY KOMPATYBILNOŚCI Z LegacyTextUtils ===
-
-    /**
-     * Kompatybilność z LegacyTextUtils.colorToAdventure() - konwertuje Component na String
-     */
-    public static String componentToLegacyString(Component component) {
-        if (component == null) return "";
-        return LegacyComponentSerializer.legacyAmpersand().serialize(component);
-    }
-
-    /**
-     * Kompatybilność z LegacyTextUtils.colorToAdventure() - konwertuje Component na ChatColor reprezentację
-     */
-    public static String componentToColorString(Component component) {
-        if (component == null) return "";
-        return LegacyComponentSerializer.legacySection().serialize(component);
-    }
-
-    // === NOWE METODY - Adventure API zamiast Bungee API ===
-
-    /**
-     * Converts a NamedTextColor to Adventure Component (zastępuje Bungee API).
-     */
-    public static Component toComponent(NamedTextColor color, String text) {
-        if (color == null) {
-            return Component.text(text != null ? text : "");
-        }
-        return Component.text(text != null ? text : "", color);
-    }
-
-    /**
-     * Converts a TextColor to Adventure Component (zastępuje Bungee API).
-     */
-    public static Component toComponent(TextColor color, String text) {
-        if (color == null) {
-            return Component.text(text != null ? text : "");
-        }
-        return Component.text(text != null ? text : "", color);
-    }
-
-    /**
-     * Tworzy Component z hex kolorem (nowa funkcjonalność).
-     */
-    public static Component createHexComponent(String text, String hexColor) {
-        if (text == null) text = "";
-        if (hexColor == null || hexColor.isEmpty()) {
-            return Component.text(text);
-        }
-        
+    public static Component hexText(String text, String hexColor) {
         try {
-            TextColor color = TextColor.fromHexString(hexColor.startsWith("#") ? hexColor : "#" + hexColor);
+            TextColor color = TextColor.fromHexString(
+                hexColor.startsWith("#") ? hexColor : "#" + hexColor
+            );
             return Component.text(text, color);
         } catch (IllegalArgumentException e) {
             return Component.text(text);
         }
     }
 
+    // === LEGACY SUPPORT ===
+    
     /**
-     * Konwertuje legacy string na Component (zastępuje Bungee deserializer).
+     * Legacy string → Component
      */
     public static Component fromLegacy(String legacyText) {
-        if (legacyText == null) return Component.empty();
         return LegacyComponentSerializer.legacyAmpersand().deserialize(legacyText);
     }
 
     /**
-     * Konwertuje Component na legacy string (dla kompatybilności).
+     * Component → Legacy string
      */
     public static String toLegacy(Component component) {
-        if (component == null) return "";
         return LegacyComponentSerializer.legacyAmpersand().serialize(component);
     }
 
-    // === ZACHOWANE METODY BUNGEE (emulowane przez Adventure API) ===
-
     /**
-     * Emuluje Bungee ChatColor przez Adventure API - zachowuje kompatybilność.
-     * @deprecated Użyj toComponent() zamiast tego
+     * Char → NamedTextColor
      */
-    @Deprecated
-    public static String toBungeeString(NamedTextColor color) {
-        if (color == null) return "";
-        return toLegacy(Component.text("", color));
+    public static NamedTextColor fromChar(char c) {
+        return toNamed(ChatColor.getByChar(c));
     }
 
     /**
-     * Emuluje Bungee ChatColor przez Adventure API - zachowuje kompatybilność.
-     * @deprecated Użyj toComponent() zamiast tego
+     * NamedTextColor → Char
      */
-    @Deprecated
-    public static String toBungeeString(TextColor color) {
-        return toBungeeString(toNamed(color));
+    public static char toChar(NamedTextColor color) {
+        return toChat(color).getChar();
+    }
+
+    // === HEX UTILITIES ===
+    
+    /**
+     * String → TextColor (hex support)
+     */
+    public static TextColor fromHex(String hexColor) {
+        try {
+            return TextColor.fromHexString(
+                hexColor.startsWith("#") ? hexColor : "#" + hexColor
+            );
+        } catch (IllegalArgumentException e) {
+            return NamedTextColor.WHITE;
+        }
     }
 
     /**
-     * Zachowuje API kompatybilność - zwraca String zamiast Component dla kompatybilności z Team.java
+     * Sprawdza czy string to hex kolor
      */
-    public static String toBungee(NamedTextColor color) {
-        if (color == null) return "";
-        return toChat(color).toString();
-    }
-
-    /**
-     * Zachowuje API kompatybilność - zwraca String zamiast Component dla kompatybilności z Team.java
-     */
-    public static String toBungee(TextColor color) {
-        return toBungee(toNamed(color));
-    }
-
-    // === UTILITY METHODS ===
-
-    /**
-     * Sprawdza czy string jest hex kolorem.
-     */
-    public static boolean isHexColor(String color) {
+    public static boolean isHex(String color) {
         if (color == null || color.isEmpty()) return false;
         String hex = color.startsWith("#") ? color.substring(1) : color;
         return hex.length() == 6 && hex.matches("[0-9A-Fa-f]+");
     }
 
+    // === PRIVATE HELPERS ===
+    
     /**
-     * Tworzy TextColor z hex stringa.
-     */
-    public static TextColor fromHex(String hexColor) {
-        if (hexColor == null || hexColor.isEmpty()) {
-            return DEFAULT_NAMED_COLOR;
-        }
-        
-        try {
-            return TextColor.fromHexString(hexColor.startsWith("#") ? hexColor : "#" + hexColor);
-        } catch (IllegalArgumentException e) {
-            return DEFAULT_NAMED_COLOR;
-        }
-    }
-
-    /**
-     * Finds the closest ChatColor for a given custom TextColor.
+     * Znajduje najbliższy ChatColor dla custom TextColor
      */
     private static ChatColor findClosestChatColor(TextColor color) {
-        Objects.requireNonNull(color, "Color cannot be null");
+        if (color == null) return ChatColor.WHITE;
         
-        int targetRed = color.red();
-        int targetGreen = color.green();
-        int targetBlue = color.blue();
-        
-        ChatColor closest = DEFAULT_CHAT_COLOR;
+        ChatColor closest = ChatColor.WHITE;
         double minDistance = Double.MAX_VALUE;
         
-        for (Map.Entry<ChatColor, NamedTextColor> entry : CHAT_TO_TEXT.entrySet()) {
-            NamedTextColor namedColor = entry.getValue();
-            double distance = colorDistance(targetRed, targetGreen, targetBlue, 
-                                          namedColor.red(), namedColor.green(), namedColor.blue());
-            
+        for (Map.Entry<ChatColor, NamedTextColor> entry : CHAT_TO_NAMED.entrySet()) {
+            double distance = colorDistance(color, entry.getValue());
             if (distance < minDistance) {
                 minDistance = distance;
                 closest = entry.getKey();
@@ -321,9 +192,13 @@ public final class ColorConversionUtils {
     }
 
     /**
-     * Calculates the Euclidean distance between two colors in RGB space.
+     * Oblicza odległość między kolorami
      */
-    private static double colorDistance(int r1, int g1, int b1, int r2, int g2, int b2) {
-        return Math.sqrt(Math.pow(r1 - r2, 2) + Math.pow(g1 - g2, 2) + Math.pow(b1 - b2, 2));
+    private static double colorDistance(TextColor c1, TextColor c2) {
+        return Math.sqrt(
+            Math.pow(c1.red() - c2.red(), 2) +
+            Math.pow(c1.green() - c2.green(), 2) +
+            Math.pow(c1.blue() - c2.blue(), 2)
+        );
     }
 }
