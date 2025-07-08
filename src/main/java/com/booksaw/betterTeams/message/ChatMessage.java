@@ -6,14 +6,14 @@ import com.booksaw.betterTeams.Team;
 import com.booksaw.betterTeams.TeamPlayer;
 import com.booksaw.betterTeams.text.Formatter;
 import com.booksaw.betterTeams.util.ColorConversionUtils;
-import com.booksaw.betterTeams.util.ComponentUtil;
-import com.booksaw.betterTeams.util.StringUtil;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import lombok.Getter;
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.format.TextColor;
 
 public class ChatMessage extends StaticComponentHolderMessage {
 
@@ -54,14 +54,18 @@ public class ChatMessage extends StaticComponentHolderMessage {
 			throw new IllegalArgumentException("The provided team player must be online.");
 		}
 		requireNonNull(message, "Team chat message cannot be null.");
-		String syntax = requireNonNull(team.getTeamChatSyntax(teamPlayer), "Team chat syntax could not be found.");
-		
-		// Używamy Adventure API zamiast deprecated getDisplayName()
-		String playerDisplayName = getPlayerDisplayName(player);
-		Component teamPreMessage = Formatter.absolute().process(StringUtil.setPlaceholders(syntax, (prefix == null ? "" : prefix) + playerDisplayName));
+
+		// Pełny Component API approach
+		Component teamPrefix = buildTeamChatPrefix(team, teamPlayer, prefix);
 		Component playerMessage = Formatter.player(player).process(message);
-		Component spyPreMessage = Formatter.absolute().process(MessageManager.getMessage(player, "spy.team", team.getName(), player.getName()));
-		return new ChatMessage(team, teamPlayer, ComponentUtil.setPlaceholders(teamPreMessage, playerMessage, "{1}"), ComponentUtil.setPlaceholders(spyPreMessage, playerMessage, "{2}"));
+		Component fullTeamMessage = Component.text()
+			.append(teamPrefix)
+			.append(Component.text(" "))
+			.append(playerMessage)
+			.build();
+
+		Component spyMessage = buildSpyMessage(team, player, playerMessage, "spy.team");
+		return new ChatMessage(team, teamPlayer, fullTeamMessage, spyMessage);
 	}
 
 	public static ChatMessage allyChat(@NotNull Team team, @NotNull TeamPlayer teamPlayer, @Nullable String prefix, @NotNull String message) {
@@ -73,14 +77,18 @@ public class ChatMessage extends StaticComponentHolderMessage {
 			throw new IllegalArgumentException("The provided team player must be online.");
 		}
 		requireNonNull(message, "Team chat message cannot be null.");
-		String syntax = requireNonNull(team.getAllyChatSyntax(teamPlayer), "Team chat syntax could not be found.");
 
-		// Używamy Adventure API zamiast deprecated getDisplayName()
-		String playerDisplayName = getPlayerDisplayName(player);
-		Component allyPreMessage = Formatter.absolute().process(StringUtil.setPlaceholders(syntax, team.getDisplayName(), (prefix == null ? "" : prefix) + playerDisplayName));
+		// Pełny Component API approach
+		Component allyPrefix = buildAllyChatPrefix(team, teamPlayer, prefix);
 		Component playerMessage = Formatter.player(player).process(message);
-		Component spyPreMessage = Formatter.absolute().process(MessageManager.getMessage(player, "spy.ally", team.getName(), player.getName()));
-		return new ChatMessage(team, teamPlayer, ComponentUtil.setPlaceholders(allyPreMessage, playerMessage, "{2}"), ComponentUtil.setPlaceholders(spyPreMessage, playerMessage, "{2}"));
+		Component fullAllyMessage = Component.text()
+			.append(allyPrefix)
+			.append(Component.text(" "))
+			.append(playerMessage)
+			.build();
+
+		Component spyMessage = buildSpyMessage(team, player, playerMessage, "spy.ally");
+		return new ChatMessage(team, teamPlayer, fullAllyMessage, spyMessage);
 	}
 
 	public static ChatMessage customSyntaxTeamChat(@NotNull Team team, @NotNull TeamPlayer teamPlayer, @Nullable String prefix, @NotNull String message, @NotNull String syntax) {
@@ -94,24 +102,127 @@ public class ChatMessage extends StaticComponentHolderMessage {
 		requireNonNull(message, "Team chat message cannot be null.");
 		requireNonNull(syntax, "Team chat syntax cannot be null.");
 
-		// Używamy Adventure API zamiast deprecated getDisplayName()
-		String playerDisplayName = getPlayerDisplayName(player);
-		Component teamPreMessage = Formatter.absolute().process(StringUtil.setPlaceholders(syntax, (prefix == null ? "" : prefix) + playerDisplayName));
+		// Custom syntax z Component API
+		Component customPrefix = buildCustomSyntaxPrefix(teamPlayer, prefix, syntax);
 		Component playerMessage = Formatter.player(player).process(message);
-		Component spyPreMessage = Formatter.absolute().process(MessageManager.getMessage(player, "spy.team", team.getName(), player.getName()));
-		return new ChatMessage(team, teamPlayer, ComponentUtil.setPlaceholders(teamPreMessage, playerMessage, "{1}"), ComponentUtil.setPlaceholders(spyPreMessage, playerMessage, "{2}"));
+		Component fullCustomMessage = Component.text()
+			.append(customPrefix)
+			.append(Component.text(" "))
+			.append(playerMessage)
+			.build();
+
+		Component spyMessage = buildSpyMessage(team, player, playerMessage, "spy.team");
+		return new ChatMessage(team, teamPlayer, fullCustomMessage, spyMessage);
 	}
 
 	/**
-	 * Pobiera display name gracza używając Adventure API zamiast deprecated getDisplayName()
-	 * @param player gracz
-	 * @return display name jako String dla kompatybilności z istniejącym kodem
+	 * Buduje prefix dla team chat używając pełnego Component API
+	 * POPRAWIONE: Używa var zamiast Component.Builder dla type inference
 	 */
-	private static String getPlayerDisplayName(Player player) {
-		// Używamy player.displayName() (Adventure API) zamiast deprecated getDisplayName()
-		Component displayNameComponent = player.displayName();
-		// Konwertujemy Component na legacy string dla kompatybilności z StringUtil.setPlaceholders()
-		return ColorConversionUtils.toLegacy(displayNameComponent);
+	private static Component buildTeamChatPrefix(Team team, TeamPlayer teamPlayer, String prefix) {
+		Player player = teamPlayer.getPlayer().getPlayer();
+		
+		// Pobierz kolor drużyny jako TextColor (Adventure API)
+		TextColor teamColor = team.getColor() != null ? 
+			ColorConversionUtils.toNamed(team.getColor()) : 
+			NamedTextColor.WHITE;
+
+		// POPRAWIONE: Używamy var zamiast Component.Builder
+		var prefixBuilder = Component.text();
+		
+		// Team tag z kolorem drużyny
+		prefixBuilder.append(Component.text("[", NamedTextColor.GRAY))
+				.append(Component.text(team.getTag() != null ? team.getTag() : team.getName(), teamColor))
+				.append(Component.text("] ", NamedTextColor.GRAY));
+
+		// Custom prefix jeśli istnieje
+		if (prefix != null && !prefix.isEmpty()) {
+			prefixBuilder.append(ColorConversionUtils.fromLegacy(prefix));
+		}
+
+		// Player display name (Adventure API zamiast deprecated getDisplayName())
+		prefixBuilder.append(player.displayName())
+				.append(Component.text(":", NamedTextColor.WHITE));
+
+		return prefixBuilder.build();
+	}
+
+	/**
+	 * Buduje prefix dla ally chat używając pełnego Component API
+	 * POPRAWIONE: Bezpośrednie fluent API
+	 */
+	private static Component buildAllyChatPrefix(Team team, TeamPlayer teamPlayer, String prefix) {
+		Player player = teamPlayer.getPlayer().getPlayer();
+		
+		TextColor teamColor = team.getColor() != null ? 
+			ColorConversionUtils.toNamed(team.getColor()) : 
+			NamedTextColor.WHITE;
+
+		// POPRAWIONE: Bezpośrednie fluent API zamiast Builder variable
+		return Component.text()
+			// Ally indicator
+			.append(Component.text("[", NamedTextColor.GRAY))
+			.append(Component.text("ALLY", NamedTextColor.GREEN))
+			.append(Component.text("] ", NamedTextColor.GRAY))
+			// Team name z kolorem
+			.append(Component.text("[", NamedTextColor.GRAY))
+			.append(Component.text(team.getDisplayName(), teamColor))
+			.append(Component.text("] ", NamedTextColor.GRAY))
+			// Custom prefix jeśli istnieje
+			.append(prefix != null && !prefix.isEmpty() ? 
+				ColorConversionUtils.fromLegacy(prefix) : Component.empty())
+			// Player display name (Adventure API)
+			.append(player.displayName())
+			.append(Component.text(":", NamedTextColor.WHITE))
+			.build();
+	}
+
+	/**
+	 * Buduje custom syntax prefix używając Component API
+	 * POPRAWIONE: Bezpośrednie fluent API
+	 */
+	private static Component buildCustomSyntaxPrefix(TeamPlayer teamPlayer, String prefix, String syntax) {
+		Player player = teamPlayer.getPlayer().getPlayer();
+		
+		// Konwertuj legacy syntax na Component używając ColorConversionUtils
+		Component syntaxComponent = ColorConversionUtils.fromLegacy(syntax);
+		
+		// POPRAWIONE: Bezpośrednie fluent API
+		return Component.text()
+			.append(syntaxComponent)
+			// Custom prefix jeśli istnieje
+			.append(prefix != null && !prefix.isEmpty() ? 
+				ColorConversionUtils.fromLegacy(prefix) : Component.empty())
+			// Player display name (Adventure API)
+			.append(player.displayName())
+			.append(Component.text(":", NamedTextColor.WHITE))
+			.build();
+	}
+
+	/**
+	 * Buduje spy message używając pełnego Component API
+	 * POPRAWIONE: Bezpośrednie fluent API z rich formatting
+	 */
+	private static Component buildSpyMessage(Team team, Player player, Component playerMessage, String spyType) {
+		TextColor teamColor = team.getColor() != null ? 
+			ColorConversionUtils.toNamed(team.getColor()) : 
+			NamedTextColor.WHITE;
+
+		return Component.text()
+			// Spy indicator
+			.append(Component.text("[", NamedTextColor.GRAY))
+			.append(Component.text("SPY", NamedTextColor.YELLOW))
+			.append(Component.text("] ", NamedTextColor.GRAY))
+			// Team name z kolorem
+			.append(Component.text("[", NamedTextColor.GRAY))
+			.append(Component.text(team.getName(), teamColor))
+			.append(Component.text("] ", NamedTextColor.GRAY))
+			// Player display name (Adventure API)
+			.append(player.displayName())
+			.append(Component.text(": ", NamedTextColor.WHITE))
+			// Actual message
+			.append(playerMessage)
+			.build();
 	}
 
 	@Override

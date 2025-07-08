@@ -79,11 +79,8 @@ public class AllyCommand extends TeamSubCommand {
 				continue;
 			}
 			
-			// Używamy Adventure API do formatowania nazwy drużyny z białym kolorem
-			Component teamName = Component.text()
-				.append(Component.text(uuidteam.getDisplayName()))
-				.color(NamedTextColor.WHITE)
-				.build();
+			// POPRAWIONE: Bezpośrednie tworzenie Component z kolorem
+			Component teamName = Component.text(uuidteam.getDisplayName(), NamedTextColor.WHITE);
 			
 			// Konwertujemy Component na legacy string dla kompatybilności
 			String formattedName = ColorConversionUtils.toLegacy(teamName);
