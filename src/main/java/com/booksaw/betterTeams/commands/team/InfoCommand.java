@@ -1,21 +1,26 @@
 package com.booksaw.betterTeams.commands.team;
 
-import com.booksaw.betterTeams.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
+import com.booksaw.betterTeams.CommandResponse;
+import com.booksaw.betterTeams.Main;
+import com.booksaw.betterTeams.PlayerRank;
+import com.booksaw.betterTeams.Team;
+import com.booksaw.betterTeams.TeamPlayer;
+import com.booksaw.betterTeams.Utils;
 import com.booksaw.betterTeams.commands.ParentCommand;
 import com.booksaw.betterTeams.commands.SubCommand;
 import com.booksaw.betterTeams.message.HelpMessage;
 import com.booksaw.betterTeams.message.MessageManager;
 import com.booksaw.betterTeams.team.SetTeamComponent;
-
-import org.bukkit.ChatColor;
+import com.booksaw.betterTeams.util.ColorConversionUtils;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.jetbrains.annotations.Nullable;
-
-import java.util.ArrayList;
-import java.util.List;
-import java.util.UUID;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
 
 /**
  * This class handles the command /team info [team/player]
@@ -30,50 +35,67 @@ public class InfoCommand extends SubCommand {
 		this.parentCommand = parentCommand;
 	}
 
-	public static List<@Nullable String> getInfoMessages(Team team) {
-		List<String> infoMessages = new ArrayList<>();
+	public static List<Component> getInfoComponents(Team team) {
+		List<Component> infoMessages = new ArrayList<>();
 
-		infoMessages.add(MessageManager.getMessage("info.name", team.getDisplayName()));
+		addIfNotNull(infoMessages, MessageManager.getMessage("info.name", team.getDisplayName()));
+
 		if (team.getDescription() != null && !team.getDescription().isEmpty()) {
-			infoMessages.add(MessageManager.getMessage("info.description", team.getDescription()));
+			addIfNotNull(infoMessages, MessageManager.getMessage("info.description", team.getDescription()));
 		}
 
-		infoMessages.add(MessageManager.getMessage("info.open", team.isOpen()));
-		infoMessages.add(MessageManager.getMessage("info.score", team.getScore()));
-		infoMessages.add(MessageManager.getMessage("info.money", team.getBalance()));
-		infoMessages.add(MessageManager.getMessage("info.level", team.getLevel()));
-		infoMessages.add(MessageManager.getMessage("info.tag", team.getTag()));
-		
+		addIfNotNull(infoMessages, MessageManager.getMessage("info.open", team.isOpen()));
+		addIfNotNull(infoMessages, MessageManager.getMessage("info.score", team.getScore()));
+		addIfNotNull(infoMessages, MessageManager.getMessage("info.money", team.getBalance()));
+		addIfNotNull(infoMessages, MessageManager.getMessage("info.level", team.getLevel()));
+		addIfNotNull(infoMessages, MessageManager.getMessage("info.tag", team.getTag()));
+
 		if (Main.plugin.getConfig().getBoolean("anchor.enable")) {
-			infoMessages.add(MessageManager.getMessage("info.anchor", team.isAnchored()));
+			String anchor = MessageManager.getMessage("info.anchor", team.isAnchored());
+			addIfNotNull(infoMessages, anchor);
 		}
 
-		infoMessages.add(getAlliesMessage(team));
-		infoMessages.add(getPlayerList(team, PlayerRank.OWNER));
-		infoMessages.add(getPlayerList(team, PlayerRank.ADMIN));
-		infoMessages.add(getPlayerList(team, PlayerRank.DEFAULT));
+		addIfNotNull(infoMessages, getAlliesMessage(team));
+		addIfNotNull(infoMessages, getPlayerList(team, PlayerRank.OWNER));
+		addIfNotNull(infoMessages, getPlayerList(team, PlayerRank.ADMIN));
+		addIfNotNull(infoMessages, getPlayerList(team, PlayerRank.DEFAULT));
 
 		return infoMessages;
 	}
 
+	private static void addIfNotNull(List<Component> list, @Nullable String legacy) {
+		if (legacy != null && !legacy.isEmpty()) {
+			list.add(ColorConversionUtils.fromLegacy(legacy));
+		}
+	}
+
+
 	private static String getSetComponentMessage(SetTeamComponent<UUID> teams, final String referenceMessage) {
-		StringBuilder tmp = new StringBuilder();
+		if (teams.get().isEmpty()) {
+			return null;
+		}
+		
+		List<String> teamNames = new ArrayList<>();
 		for (UUID uuid : teams.get()) {
 			Team ally = Team.getTeam(uuid);
-
 			if (ally == null) {
 				Main.plugin.getLogger().warning("Unable to locate team with UUID: " + uuid);
 				continue;
 			}
-
-			tmp.append(ally.getDisplayName()).append(ChatColor.WHITE).append(", ");
+			teamNames.add(ally.getDisplayName());
 		}
-
-		if (tmp.length() > 2) {
-			return MessageManager.getMessage(referenceMessage, tmp.substring(0, tmp.length() - 2));
+		
+		if (teamNames.isEmpty()) {
+			return null;
 		}
-
-		return null;
+		
+		// Łączenie nazw drużyn z białymi separatorami
+		String joinedNames = String.join(
+			ColorConversionUtils.toLegacy(Component.text(", ", NamedTextColor.WHITE)), 
+			teamNames
+		);
+		
+		return MessageManager.getMessage(referenceMessage, joinedNames);
 	}
 
 	private static String getAlliesMessage(Team team) {
@@ -144,13 +166,10 @@ public class InfoCommand extends SubCommand {
 	}
 
 	private void displayTeamInfo(CommandSender sender, Team team) {
-		List<String> toDisplay = getInfoMessages(team);
+		List<Component> toDisplay = getInfoComponents(team);
 
-		for (String str : toDisplay) {
-			if (str == null || str.isEmpty()) {
-				continue;
-			}
-			MessageManager.sendFullMessage(sender, str, true);
+		for (Component message : toDisplay) {
+			MessageManager.sendFullMessage(sender, message);
 		}
 	}
 

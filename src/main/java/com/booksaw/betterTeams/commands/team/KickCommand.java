@@ -1,90 +1,84 @@
 package com.booksaw.betterTeams.commands.team;
 
-import com.booksaw.betterTeams.*;
-import com.booksaw.betterTeams.commands.presets.TeamSubCommand;
-import com.booksaw.betterTeams.message.MessageManager;
-import org.bukkit.command.CommandSender;
-import org.bukkit.entity.Player;
-
+import java.time.Duration;
 import java.util.List;
 import java.util.Objects;
+import com.booksaw.betterTeams.CommandResponse;
+import com.booksaw.betterTeams.Main;
+import com.booksaw.betterTeams.PlayerRank;
+import com.booksaw.betterTeams.Team;
+import com.booksaw.betterTeams.TeamPlayer;
+import com.booksaw.betterTeams.commands.presets.TeamSubCommand;
+import com.booksaw.betterTeams.message.MessageManager;
+import com.booksaw.betterTeams.util.ColorConversionUtils;
+import org.bukkit.command.CommandSender;
+import org.bukkit.entity.Player;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.title.Title;
 
 public class KickCommand extends TeamSubCommand {
 
-	@Override
-	public CommandResponse onCommand(TeamPlayer teamPlayer, String label, String[] args, Team team) {
+    @Override
+    public CommandResponse onCommand(TeamPlayer teamPlayer, String label, String[] args, Team team) {
+        if (args.length < 1) {
+            return new CommandResponse("invalidUsage");
+        }
 
-		/*
-		 * method is depreciated as it does not guarantee the expected player, in most
-		 * use cases this will work and it will be down to the user if it does not due
-		 * to name changes This method is appropriate to use in this use case (so users
-		 * can view offline users teams by name not just by team name)
-		 */
-		TeamPlayerResult teamPlayerResult = getTeamPlayer(team, args[0]);
-		if (teamPlayerResult.isCR()) {
-			return teamPlayerResult.getCr();
-		}
+        TeamPlayerResult result = getTeamPlayer(team, args[0]);
+        if (result.isCR()) {
+            return result.getCr();
+        }
 
-		TeamPlayer kickedPlayer = teamPlayerResult.getPlayer();
+        TeamPlayer kicked = result.getPlayer();
+        if (teamPlayer.getRank().value <= Objects.requireNonNull(kicked).getRank().value) {
+            return new CommandResponse("kick.noPerm");
+        }
 
-		// ensuring the player they are banning has less perms than them
-		if (teamPlayer.getRank().value <= Objects.requireNonNull(kickedPlayer).getRank().value) {
-			return new CommandResponse("kick.noPerm");
-		}
+        team.removePlayer(kicked);
 
-		team.removePlayer(kickedPlayer);
+        Player player = kicked.getPlayer().getPlayer();
+        if (player != null) {
+            MessageManager.sendMessage(player, "kick.notify", team.getName());
 
-		Player player = kickedPlayer.getPlayer().getPlayer();
-		if (player != null) {
-			MessageManager.sendMessage(player, "kick.notify", team.getName());
+            if (Main.plugin.getConfig().getBoolean("titleRemoval")) {
+                sendKickTitle(player);
+            }
+        }
 
-			if (Main.plugin.getConfig().getBoolean("titleRemoval")) {
-				MessageManager.sendSubTitle(player, "kick.title");
-			}
+        return new CommandResponse(true, "kick.success");
+    }
 
-		}
+    /**
+     * Wysyła kick title używając Adventure API zamiast deprecated sendSubTitle()
+     */
+    private void sendKickTitle(Player player) {
+        String kickTitleMessage = MessageManager.getMessage("kick.title");
+        Component titleComponent = ColorConversionUtils.fromLegacy(kickTitleMessage);
+        
+        Title kickTitle = Title.title(
+            Component.empty(),              // title (pusty)
+            titleComponent,                 // subtitle (wiadomość o kick)
+            Title.Times.times(
+                Duration.ofMillis(500),     // fade in
+                Duration.ofSeconds(3),      // stay (krótszy niż ban)
+                Duration.ofSeconds(1)       // fade out
+            )
+        );
+        
+        player.showTitle(kickTitle);
+    }
 
-		return new CommandResponse(true, "kick.success");
-	}
+    @Override public String getCommand() { return "kick"; }
+    @Override public String getNode() { return "kick"; }
+    @Override public String getHelp() { return "Kick that player from your team"; }
+    @Override public String getArguments() { return "<player>"; }
+    @Override public int getMinimumArguments() { return 1; }
+    @Override public int getMaximumArguments() { return 1; }
 
-	@Override
-	public String getCommand() {
-		return "kick";
-	}
+    @Override
+    public void onTabComplete(List<String> options, CommandSender sender, String label, String[] args) {
+        addPlayerStringList(options, (args.length == 0) ? "" : args[0]);
+    }
 
-	@Override
-	public int getMinimumArguments() {
-		return 1;
-	}
-
-	@Override
-	public String getNode() {
-		return "kick";
-	}
-
-	@Override
-	public String getHelp() {
-		return "Kick that player from your team";
-	}
-
-	@Override
-	public String getArguments() {
-		return "<player>";
-	}
-
-	@Override
-	public int getMaximumArguments() {
-		return 1;
-	}
-
-	@Override
-	public void onTabComplete(List<String> options, CommandSender sender, String label, String[] args) {
-		addPlayerStringList(options, (args.length == 0) ? "" : args[0]);
-	}
-
-	@Override
-	public PlayerRank getDefaultRank() {
-		return PlayerRank.ADMIN;
-	}
-
+    @Override public PlayerRank getDefaultRank() { return PlayerRank.ADMIN; }
 }

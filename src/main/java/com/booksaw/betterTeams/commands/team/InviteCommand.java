@@ -1,27 +1,30 @@
 package com.booksaw.betterTeams.commands.team;
 
-import com.booksaw.betterTeams.*;
+import java.util.List;
+import com.booksaw.betterTeams.CommandResponse;
+import com.booksaw.betterTeams.PlayerRank;
+import com.booksaw.betterTeams.Team;
+import com.booksaw.betterTeams.TeamPlayer;
+import com.booksaw.betterTeams.Utils;
 import com.booksaw.betterTeams.commands.presets.TeamSubCommand;
 import com.booksaw.betterTeams.message.MessageManager;
 import com.booksaw.betterTeams.text.Formatter;
-
-import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.event.ClickEvent;
-import net.kyori.adventure.text.event.HoverEvent;
-
 import org.bukkit.Bukkit;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
-
-import java.util.List;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.event.ClickEvent;
+import net.kyori.adventure.text.event.HoverEvent;
 
 public class InviteCommand extends TeamSubCommand {
 
 	@Override
 	public CommandResponse onCommand(TeamPlayer teamPlayer, String label, String[] args, Team team) {
+		if (args.length < 1) {
+			return new CommandResponse("invalidUsage"); // zabezpieczenie
+		}
 
 		Player toInvite = Bukkit.getPlayer(args[0]);
-
 		if (toInvite == null || Utils.isVanished(toInvite)) {
 			return new CommandResponse("noPlayer");
 		}
@@ -35,25 +38,41 @@ public class InviteCommand extends TeamSubCommand {
 		}
 
 		int limit = team.getTeamLimit();
-
 		if (limit > 0 && limit <= team.getMembers().size() + team.getInvitedPlayers().size()) {
 			return new CommandResponse("invite.full");
 		}
 
-		// player being invited is not in a team
+		// zapisz zaproszenie
 		team.invite(toInvite.getUniqueId());
 
+		// uzyskaj subkomendę join z messages.yml
 		String joinSubcommand = MessageManager.getMessage("command.join");
 		if (joinSubcommand == null || joinSubcommand.isEmpty()) {
 			joinSubcommand = "join";
+		} else if (joinSubcommand.startsWith("/")) {
+			joinSubcommand = joinSubcommand.substring(1);
 		}
 
-		Component component = Formatter.absolute().process(MessageManager.getMessage(toInvite, "invite.invite", team.getName()));
-		component = component.clickEvent(ClickEvent.runCommand("/team " + joinSubcommand + " " + team.getName()));
-		component = component.hoverEvent(HoverEvent.showText(Formatter.absolute().process(MessageManager.getMessage(toInvite, "invite.hover", team.getName()))));
+		Component component = buildInviteComponent(toInvite, team, joinSubcommand);
 		MessageManager.sendFullMessage(toInvite, component, true);
 
 		return new CommandResponse(true, "invite.success");
+	}
+
+	private Component buildInviteComponent(Player recipient, Team team, String joinSubcommand) {
+		String teamName = team.getName();
+
+		Component base = Formatter.absolute().process(
+			MessageManager.getMessage(recipient, "invite.invite", teamName)
+		);
+
+		Component hover = Formatter.absolute().process(
+			MessageManager.getMessage(recipient, "invite.hover", teamName)
+		);
+
+		return base
+			.clickEvent(ClickEvent.runCommand("/team " + joinSubcommand + " " + teamName))
+			.hoverEvent(HoverEvent.showText(hover));
 	}
 
 	@Override
@@ -95,5 +114,4 @@ public class InviteCommand extends TeamSubCommand {
 	public PlayerRank getDefaultRank() {
 		return PlayerRank.ADMIN;
 	}
-
 }
