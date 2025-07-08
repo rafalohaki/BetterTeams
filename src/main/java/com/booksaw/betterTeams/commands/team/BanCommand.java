@@ -1,13 +1,21 @@
 package com.booksaw.betterTeams.commands.team;
 
-import com.booksaw.betterTeams.*;
-import com.booksaw.betterTeams.commands.presets.TeamSubCommand;
-import com.booksaw.betterTeams.message.MessageManager;
-import org.bukkit.OfflinePlayer;
-import org.bukkit.command.CommandSender;
-
+import java.time.Duration;
 import java.util.List;
 import java.util.Objects;
+import com.booksaw.betterTeams.CommandResponse;
+import com.booksaw.betterTeams.Main;
+import com.booksaw.betterTeams.PlayerRank;
+import com.booksaw.betterTeams.Team;
+import com.booksaw.betterTeams.TeamPlayer;
+import com.booksaw.betterTeams.Utils;
+import com.booksaw.betterTeams.commands.presets.TeamSubCommand;
+import com.booksaw.betterTeams.message.MessageManager;
+import com.booksaw.betterTeams.util.ColorConversionUtils;
+import org.bukkit.OfflinePlayer;
+import org.bukkit.command.CommandSender;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.title.Title;
 
 public class BanCommand extends TeamSubCommand {
 
@@ -55,11 +63,34 @@ public class BanCommand extends TeamSubCommand {
 			MessageManager.sendMessage(player.getPlayer(), "ban.notify", team.getName());
 
 			if (Main.plugin.getConfig().getBoolean("titleRemoval")) {
-				player.getPlayer().sendTitle(" ", MessageManager.getMessage("ban.title"), 10, 100, 20);
+				sendBanTitle(player.getPlayer());
 			}
 		}
 
 		return new CommandResponse(true, "ban.success");
+	}
+
+	/**
+	 * Wysyła title o banie używając Adventure API zamiast deprecated sendTitle()
+	 */
+	private void sendBanTitle(org.bukkit.entity.Player player) {
+		// Konwertuj message na Component
+		String banTitleMessage = MessageManager.getMessage("ban.title");
+		Component titleComponent = ColorConversionUtils.fromLegacy(banTitleMessage);
+		
+		// Utwórz Title używając Adventure API
+		Title banTitle = Title.title(
+			Component.empty(),              // title (pusty)
+			titleComponent,                 // subtitle (wiadomość o banie)
+			Title.Times.times(
+				Duration.ofMillis(500),     // fade in (10 ticks = 500ms)
+				Duration.ofSeconds(5),      // stay (100 ticks = 5s)
+				Duration.ofSeconds(1)       // fade out (20 ticks = 1s)
+			)
+		);
+		
+		// Wyślij title używając Adventure API
+		player.showTitle(banTitle);
 	}
 
 	@Override
@@ -101,5 +132,4 @@ public class BanCommand extends TeamSubCommand {
 	public PlayerRank getDefaultRank() {
 		return PlayerRank.ADMIN;
 	}
-
 }

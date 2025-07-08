@@ -130,6 +130,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
+import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.RegisteredServiceProvider;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.jetbrains.annotations.NotNull;
@@ -201,18 +202,27 @@ public class Main extends JavaPlugin {
 		plugin = this;
 		configManager = new ConfigManager("config", true);
 
-		if (Bukkit.getPluginManager().getPlugin("WorldGuard") != null
-				&& configManager.config.getBoolean("worldGuard.enabled")) {
-			char ver = Bukkit.getPluginManager().getPlugin("WorldGuard").getDescription().getVersion().charAt(0);
-			if (ver == '7') {
-				wgManagement = new WorldGuardManagerV7();
-			} else {
-				getLogger().warning("Your version of worldguard ("
-						+ Bukkit.getPluginManager().getPlugin("WorldGuard").getDescription().getVersion()
-						+ ") is not yet supported. Currently supported: version 7.x.x.");
+		Plugin worldGuardPlugin = Bukkit.getPluginManager().getPlugin("WorldGuard");
+		if (worldGuardPlugin != null && configManager.config.getBoolean("worldGuard.enabled")) {
+			
+			try {
+				String version = worldGuardPlugin.getPluginMeta().getVersion();
+				char majorVersion = version.charAt(0);
+				
+				if (majorVersion == '7') {
+					wgManagement = new WorldGuardManagerV7();
+					getLogger().info("WorldGuard " + version + " integration enabled");
+				} else {
+					getLogger().warning("Unsupported WorldGuard version: " + version
+						+ ". Currently supported: 7.x.x");
+				}
+				
+			} catch (Exception e) {
+				getLogger().warning("Failed to detect WorldGuard version: " + e.getMessage());
 			}
 		}
 	}
+
 
 	@Override
 	public void onEnable() {
