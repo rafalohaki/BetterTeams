@@ -734,7 +734,12 @@ public class Team {
 	 * @return If the player was removed from the team
 	 */
 	public boolean removePlayer(OfflinePlayer p) {
-		return removePlayer(getTeamPlayer(p));
+		TeamPlayer tp = getTeamPlayer(p);
+		if (tp == null) {
+			Main.plugin.getLogger().warning("[BetterTeams] No TeamPlayer data for " + p.getName() + " (" + p.getUniqueId() + ")");
+			return false;
+		}
+		return removePlayer(tp);
 	}
 
 	/**
@@ -746,6 +751,11 @@ public class Team {
 	 * @return If the player was removed from the team
 	 */
 	public boolean removePlayer(TeamPlayer p) {
+		if (p == null) {
+			Main.plugin.getLogger().warning("[BetterTeams] Tried to remove null TeamPlayer from team '" + getName() + "'. Skipping.");
+			return false;
+		}
+
 		try {
 			members.remove(this, p);
 		} catch (CancelledEventException e) {
@@ -753,6 +763,7 @@ public class Team {
 		}
 
 		savePlayers();
+
 		if (p.isAnchored()) {
 			anchoredPlayers.remove(this, p.getPlayerUUID());
 			saveAnchoredPlayers();

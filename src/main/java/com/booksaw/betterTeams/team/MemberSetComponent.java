@@ -10,77 +10,92 @@ import com.booksaw.betterTeams.customEvents.post.PostPlayerLeaveTeamEvent;
 import com.booksaw.betterTeams.exceptions.CancelledEventException;
 import com.booksaw.betterTeams.message.MessageManager;
 import com.booksaw.betterTeams.team.storage.team.TeamStorage;
+import com.booksaw.betterTeams.util.ColorConversionUtils;
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
+import org.bukkit.entity.Player;
+import net.kyori.adventure.text.Component;
 
 public class MemberSetComponent extends TeamPlayerSetComponent {
 
-	@Override
-	public void add(Team team, TeamPlayer teamPlayer) {
+    @Override
+    public void add(Team team, TeamPlayer teamPlayer) {
+        PlayerJoinTeamEvent event = new PlayerJoinTeamEvent(team, teamPlayer);
+        Bukkit.getPluginManager().callEvent(event);
+        if (event.isCancelled()) {
+            throw new CancelledEventException(event);
+        }
 
-		// calling the event
-		PlayerJoinTeamEvent event = new PlayerJoinTeamEvent(team, teamPlayer);
-		Bukkit.getPluginManager().callEvent(event);
-		if (event.isCancelled()) {
-			throw new CancelledEventException(event);
-		}
+        OfflinePlayer p = teamPlayer.getPlayer();
+        team.getInvitedPlayers().remove(p.getUniqueId());
 
-		OfflinePlayer p = teamPlayer.getPlayer();
+        if (p.isOnline()) {
+            String playerDisplayName = getPlayerDisplayName(p.getPlayer());
 
-		team.getInvitedPlayers().remove(p.getUniqueId());
+            for (TeamPlayer player : set) {
+                if (player.getPlayer().isOnline()) {
+                    MessageManager.sendMessage(player.getPlayer().getPlayer(), "join.notify", playerDisplayName);
+                }
+            }
 
-		// if the player is offline there will be no player object for them
-		if (p.isOnline()) {
-			for (TeamPlayer player : set) {
-				if (player.getPlayer().isOnline()) {
-					MessageManager.sendMessage(player.getPlayer().getPlayer(), "join.notify", p.getPlayer().getDisplayName());
-				}
-			}
+            if (Main.plugin.teamManagement != null) {
+                Main.plugin.teamManagement.displayBelowName(p.getPlayer());
+            }
+        }
 
-			if (Main.plugin.teamManagement != null) {
-				Main.plugin.teamManagement.displayBelowName(p.getPlayer());
-			}
-		}
+        Team.getTeamManager().playerJoinTeam(team, teamPlayer);
+        set.add(teamPlayer);
+        Bukkit.getPluginManager().callEvent(new PostPlayerJoinTeamEvent(team, teamPlayer));
+    }
 
-		Team.getTeamManager().playerJoinTeam(team, teamPlayer);
-		set.add(teamPlayer);
+    @Override
+    public void remove(Team team, TeamPlayer teamPlayer) {
+        if (teamPlayer == null) {
+            Main.plugin.getLogger().warning("[BetterTeams] Tried to remove null TeamPlayer from team '"
+                    + (team != null ? team.getName() : "null") + "'. Skipping removal.");
+            return;
+        }
 
-		Bukkit.getPluginManager().callEvent(new PostPlayerJoinTeamEvent(team, teamPlayer));
-	}
+        PlayerLeaveTeamEvent event = new PlayerLeaveTeamEvent(team, teamPlayer);
+        Bukkit.getPluginManager().callEvent(event);
+        if (event.isCancelled()) {
+            throw new CancelledEventException(event);
+        }
 
-	@Override
-	public void remove(Team team, TeamPlayer teamPlayer) {
-		final PlayerLeaveTeamEvent event = new PlayerLeaveTeamEvent(team, teamPlayer);
-		Bukkit.getPluginManager().callEvent(event);
-		if (event.isCancelled()) {
-			throw new CancelledEventException(event);
-		}
+        OfflinePlayer p = teamPlayer.getPlayer();
+        if (Main.plugin.teamManagement != null && p.isOnline()) {
+            Main.plugin.teamManagement.remove(p.getPlayer());
+        }
 
-		OfflinePlayer p = teamPlayer.getPlayer();
+        Team.getTeamManager().playerLeaveTeam(team, teamPlayer);
+        set.remove(teamPlayer);
+        Bukkit.getPluginManager().callEvent(new PostPlayerLeaveTeamEvent(team, teamPlayer));
+    }
 
-		if (Main.plugin.teamManagement != null && p.isOnline()) {
-			Main.plugin.teamManagement.remove(p.getPlayer());
-		}
-		Team.getTeamManager().playerLeaveTeam(team, teamPlayer);
-		set.remove(teamPlayer);
+    /**
+     * Converts a Player's display name to a legacy-formatted string using Adventure.
+     *
+     * @param player The player whose display name should be fetched
+     * @return Legacy-colored display name string
+     */
+    private String getPlayerDisplayName(Player player) {
+        Component displayNameComponent = player.displayName();
+        return ColorConversionUtils.toLegacy(displayNameComponent);
+    }
 
-		Bukkit.getPluginManager().callEvent(new PostPlayerLeaveTeamEvent(team, teamPlayer));
-	}
+    @Override
+    public String getSectionHeading() {
+        return "players";
+    }
 
-	@Override
-	public String getSectionHeading() {
-		return "players";
-	}
+    @Override
+    public void load(TeamStorage section) {
+        set.clear();
+        set.addAll(section.getPlayerList());
+    }
 
-	@Override
-	public void load(TeamStorage section) {
-		set.clear();
-		set.addAll(section.getPlayerList());
-	}
-
-	@Override
-	public void save(TeamStorage storage) {
-		storage.setPlayerList(getConvertedList());
-	}
-
+    @Override
+    public void save(TeamStorage storage) {
+        storage.setPlayerList(getConvertedList());
+    }
 }
