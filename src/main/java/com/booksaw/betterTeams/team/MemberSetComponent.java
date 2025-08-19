@@ -67,7 +67,13 @@ public class MemberSetComponent extends TeamPlayerSetComponent {
 		Team.getTeamManager().playerLeaveTeam(team, teamPlayer);
 		set.remove(teamPlayer);
 
-		Bukkit.getPluginManager().callEvent(new PostPlayerLeaveTeamEvent(team, teamPlayer));
+		// Call PostPlayerLeaveTeamEvent asynchronously to avoid IllegalStateException
+		new org.bukkit.scheduler.BukkitRunnable() {
+			@Override
+			public void run() {
+				Bukkit.getPluginManager().callEvent(new PostPlayerLeaveTeamEvent(team, teamPlayer));
+			}
+		}.runTaskAsynchronously(Main.plugin);
 	}
 
 	@Override

@@ -28,9 +28,9 @@ import com.booksaw.betterTeams.customEvents.post.PostTeamColorChangeEvent;
 import com.booksaw.betterTeams.customEvents.post.PostTeamNameChangeEvent;
 import com.booksaw.betterTeams.customEvents.post.PostTeamSendMessageEvent;
 import com.booksaw.betterTeams.customEvents.post.PostTeamTagChangeEvent;
+import org.bukkit.scheduler.BukkitRunnable;
 import com.booksaw.betterTeams.customEvents.TeamMessageEvent;
 import com.booksaw.betterTeams.customEvents.TeamPreMessageEvent;
-import org.bukkit.scheduler.BukkitRunnable;
 import com.booksaw.betterTeams.exceptions.CancelledEventException;
 import com.booksaw.betterTeams.message.ChatMessage;
 import com.booksaw.betterTeams.message.Message;
@@ -502,7 +502,13 @@ public class Team {
 
 		registerTeamName();
 
-		Bukkit.getPluginManager().callEvent(new PostTeamNameChangeEvent(this, previousName, name, playerSource));
+		final String finalName = name;
+		new BukkitRunnable() {
+			@Override
+			public void run() {
+				Bukkit.getPluginManager().callEvent(new PostTeamNameChangeEvent(Team.this, previousName, finalName, playerSource));
+			}
+		}.runTaskAsynchronously(Main.plugin);
 	}
 
 	private void registerTeamName() {
@@ -636,7 +642,14 @@ public class Team {
 
 		registerTeamName();
 
-		Bukkit.getPluginManager().callEvent(new PostTeamTagChangeEvent(this, oldTag, getTag(false)));
+		final String finalOldTag = oldTag;
+		final String finalNewTag = getTag(false);
+		new BukkitRunnable() {
+			@Override
+			public void run() {
+				Bukkit.getPluginManager().callEvent(new PostTeamTagChangeEvent(Team.this, finalOldTag, finalNewTag));
+			}
+		}.runTaskAsynchronously(Main.plugin);
 	}
 
 	public void setOpen(boolean open) {
@@ -675,7 +688,14 @@ public class Team {
 
 		registerTeamName();
 
-		Bukkit.getPluginManager().callEvent(new PostTeamColorChangeEvent(this, oldColor, color));
+		final ChatColor finalOldColor = oldColor;
+		final ChatColor finalNewColor = color;
+		new BukkitRunnable() {
+			@Override
+			public void run() {
+				Bukkit.getPluginManager().callEvent(new PostTeamColorChangeEvent(Team.this, finalOldColor, finalNewColor));
+			}
+		}.runTaskAsynchronously(Main.plugin);
 	}
 
 	/**
@@ -863,7 +883,13 @@ public class Team {
 			team = null;
 		}
 
-		Bukkit.getPluginManager().callEvent(new PostDisbandTeamEvent(this, player, alliesClone, membersClone));
+		// Call PostDisbandTeamEvent asynchronously to avoid IllegalStateException
+		new BukkitRunnable() {
+			@Override
+			public void run() {
+				Bukkit.getPluginManager().callEvent(new PostDisbandTeamEvent(Team.this, player, alliesClone, membersClone));
+			}
+		}.runTaskAsynchronously(Main.plugin);
 	}
 
 	/**
@@ -958,7 +984,13 @@ public class Team {
 		storage.promotePlayer(promotePlayer);
 		savePlayers();
 
-		Bukkit.getPluginManager().callEvent(new PostPromotePlayerEvent(this, promotePlayer, oldRank, newRank));
+		// Call PostPromotePlayerEvent asynchronously as required by Paper API
+		new BukkitRunnable() {
+			@Override
+			public void run() {
+				Bukkit.getPluginManager().callEvent(new PostPromotePlayerEvent(Team.this, promotePlayer, oldRank, newRank));
+			}
+		}.runTaskAsynchronously(Main.plugin);
 	}
 
 	/**
@@ -989,7 +1021,13 @@ public class Team {
 		storage.demotePlayer(demotePlayer);
 		savePlayers();
 
-		Bukkit.getPluginManager().callEvent(new PostDemotePlayerEvent(this, demotePlayer, oldRank, newRank));
+		// Call PostDemotePlayerEvent asynchronously to avoid IllegalStateException
+		new BukkitRunnable() {
+			@Override
+			public void run() {
+				Bukkit.getPluginManager().callEvent(new PostDemotePlayerEvent(Team.this, demotePlayer, oldRank, newRank));
+			}
+		}.runTaskAsynchronously(Main.plugin);
 	}
 
 	public void setTeamHome(Location teamHome) {
@@ -1368,8 +1406,16 @@ public class Team {
 			getMembers().broadcastTitle(message);
 		}
 
-		if (sendPostEvent)
-			Bukkit.getPluginManager().callEvent(new PostRelationChangeTeamEvent(this, other, prevRelation, RelationType.ALLY));
+		if (sendPostEvent) {
+			final RelationType finalPrevRelation = prevRelation;
+			final Team finalOther = other;
+			new BukkitRunnable() {
+				@Override
+				public void run() {
+					Bukkit.getPluginManager().callEvent(new PostRelationChangeTeamEvent(Team.this, finalOther, finalPrevRelation, RelationType.ALLY));
+				}
+			}.runTaskAsynchronously(Main.plugin);
+		}
 	}
 
 	/**
@@ -1446,8 +1492,16 @@ public class Team {
 			getMembers().broadcastTitle(titleMessage);
 		}
 
-		if (sendPostEvent)
-			Bukkit.getPluginManager().callEvent(new PostRelationChangeTeamEvent(this, other, prevRelation, RelationType.NEUTRAL));
+		if (sendPostEvent) {
+			final RelationType finalPrevRelation = prevRelation;
+			final Team finalOther = other;
+			new BukkitRunnable() {
+				@Override
+				public void run() {
+					Bukkit.getPluginManager().callEvent(new PostRelationChangeTeamEvent(Team.this, finalOther, finalPrevRelation, RelationType.NEUTRAL));
+				}
+			}.runTaskAsynchronously(Main.plugin);
+		}
 	}
 
 	public void becomeNeutral(Team otherTeam, boolean sendPostEvent) {
