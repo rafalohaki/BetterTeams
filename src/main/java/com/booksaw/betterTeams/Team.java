@@ -28,6 +28,9 @@ import com.booksaw.betterTeams.customEvents.post.PostTeamColorChangeEvent;
 import com.booksaw.betterTeams.customEvents.post.PostTeamNameChangeEvent;
 import com.booksaw.betterTeams.customEvents.post.PostTeamSendMessageEvent;
 import com.booksaw.betterTeams.customEvents.post.PostTeamTagChangeEvent;
+import com.booksaw.betterTeams.customEvents.TeamMessageEvent;
+import com.booksaw.betterTeams.customEvents.TeamPreMessageEvent;
+import org.bukkit.scheduler.BukkitRunnable;
 import com.booksaw.betterTeams.exceptions.CancelledEventException;
 import com.booksaw.betterTeams.message.ChatMessage;
 import com.booksaw.betterTeams.message.Message;
@@ -1059,12 +1062,30 @@ public class Team {
 		recipients.removeIf(teamPlayer -> !teamPlayer.getPlayer().isOnline()); // Offline players won't be recipients
 		String prefix = sender.getPrefix(returnTo);
 
-		// Notify third party plugins that a team message is going to be sent
+		// Notify third party plugins that a team message is going to be sent (async)
 		TeamSendMessageEvent teamSendMessageEvent = new TeamSendMessageEvent(this, sender, message, format, prefix, recipients);
-		Bukkit.getPluginManager().callEvent(teamSendMessageEvent);
+		new BukkitRunnable() {
+			@Override
+			public void run() {
+				Bukkit.getPluginManager().callEvent(teamSendMessageEvent);
+			}
+		}.runTaskAsynchronously(Main.plugin);
 
 		// Process any updates after the event has been dispatched
 		if (teamSendMessageEvent.isCancelled()) {
+			return;
+		}
+
+		// Handle deprecated events for backward compatibility
+		TeamPreMessageEvent preEvent = new TeamPreMessageEvent(this, sender, message, format, prefix, recipients);
+		new BukkitRunnable() {
+			@Override
+			public void run() {
+				Bukkit.getPluginManager().callEvent(preEvent);
+			}
+		}.runTaskAsynchronously(Main.plugin);
+
+		if (preEvent.isCancelled()) {
 			return;
 		}
 
@@ -1090,8 +1111,27 @@ public class Team {
 		}
 
 		String fMessage = LegacyTextUtils.serialize(chatMsg.getMessage());
-		// Notify third party plugins that a message has been dispatched
-		Bukkit.getPluginManager().callEvent(new PostTeamSendMessageEvent(this, sender, fMessage, recipients));
+		
+		// Create final copies for lambda expressions
+		final Set<TeamPlayer> finalRecipients = recipients;
+		final String finalMessage = fMessage;
+		
+		// Handle deprecated TeamMessageEvent for backward compatibility
+		TeamMessageEvent messageEvent = new TeamMessageEvent(this, sender, finalMessage, finalRecipients);
+		new BukkitRunnable() {
+			@Override
+			public void run() {
+				Bukkit.getPluginManager().callEvent(messageEvent);
+			}
+		}.runTaskAsynchronously(Main.plugin);
+
+		// Notify third party plugins that a message has been dispatched (async)
+		new BukkitRunnable() {
+			@Override
+			public void run() {
+				Bukkit.getPluginManager().callEvent(new PostTeamSendMessageEvent(Team.this, sender, finalMessage, finalRecipients));
+			}
+		}.runTaskAsynchronously(Main.plugin);
 	}
 
 	private static @NotNull ChatColor getPreviousChatColor(String toTest) {
