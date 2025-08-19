@@ -1,20 +1,60 @@
 package com.booksaw.betterTeams;
 
-import com.booksaw.betterTeams.customEvents.*;
-import com.booksaw.betterTeams.customEvents.post.*;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+import com.booksaw.betterTeams.customEvents.DemotePlayerEvent;
+import com.booksaw.betterTeams.customEvents.DisbandTeamEvent;
+import com.booksaw.betterTeams.customEvents.PromotePlayerEvent;
+import com.booksaw.betterTeams.customEvents.RelationChangeTeamEvent;
+import com.booksaw.betterTeams.customEvents.TeamColorChangeEvent;
+import com.booksaw.betterTeams.customEvents.TeamDisallowedPvPEvent;
+import com.booksaw.betterTeams.customEvents.TeamNameChangeEvent;
+import com.booksaw.betterTeams.customEvents.TeamSendMessageEvent;
+import com.booksaw.betterTeams.customEvents.TeamTagChangeEvent;
+import com.booksaw.betterTeams.customEvents.post.PostDemotePlayerEvent;
+import com.booksaw.betterTeams.customEvents.post.PostDisbandTeamEvent;
+import com.booksaw.betterTeams.customEvents.post.PostPromotePlayerEvent;
+import com.booksaw.betterTeams.customEvents.post.PostRelationChangeTeamEvent;
+import com.booksaw.betterTeams.customEvents.post.PostTeamColorChangeEvent;
+import com.booksaw.betterTeams.customEvents.post.PostTeamNameChangeEvent;
+import com.booksaw.betterTeams.customEvents.post.PostTeamSendMessageEvent;
+import com.booksaw.betterTeams.customEvents.post.PostTeamTagChangeEvent;
 import com.booksaw.betterTeams.exceptions.CancelledEventException;
 import com.booksaw.betterTeams.message.ChatMessage;
 import com.booksaw.betterTeams.message.Message;
 import com.booksaw.betterTeams.message.MessageManager;
 import com.booksaw.betterTeams.message.ReferencedFormatMessage;
-import com.booksaw.betterTeams.team.*;
+import com.booksaw.betterTeams.team.AllyRequestComponent;
+import com.booksaw.betterTeams.team.AllySetComponent;
+import com.booksaw.betterTeams.team.AnchoredPlayerUUIDSetComponent;
 import com.booksaw.betterTeams.team.AnchoredPlayerUUIDSetComponent.AnchorResult;
+import com.booksaw.betterTeams.team.BanSetComponent;
+import com.booksaw.betterTeams.team.ChestClaimComponent;
+import com.booksaw.betterTeams.team.EChestComponent;
+import com.booksaw.betterTeams.team.LocationSetComponent;
+import com.booksaw.betterTeams.team.MemberSetComponent;
+import com.booksaw.betterTeams.team.MoneyComponent;
+import com.booksaw.betterTeams.team.ScoreComponent;
+import com.booksaw.betterTeams.team.TeamManager;
+import com.booksaw.betterTeams.team.WarpSetComponent;
 import com.booksaw.betterTeams.team.storage.StorageType;
 import com.booksaw.betterTeams.team.storage.team.StoredTeamValue;
 import com.booksaw.betterTeams.team.storage.team.TeamStorage;
 import com.booksaw.betterTeams.text.LegacyTextUtils;
-import lombok.Getter;
-import org.bukkit.*;
+import org.bukkit.Bukkit;
+import org.bukkit.ChatColor;
+import org.bukkit.Location;
+import org.bukkit.Material;
+import org.bukkit.OfflinePlayer;
 import org.bukkit.block.Block;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
@@ -23,12 +63,7 @@ import org.bukkit.scoreboard.Scoreboard;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
-
-import java.util.*;
-import java.util.concurrent.TimeUnit;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-import java.util.stream.Collectors;
+import lombok.Getter;
 
 /**
  * This class is used to manage a team and all of it's participants
@@ -857,7 +892,7 @@ public class Team {
 			return;
 		}
 
-		Main.plugin.getFoliaLib().getScheduler().runLaterAsync(task -> {
+		Bukkit.getScheduler().runTaskLaterAsynchronously(Main.plugin, () -> {
 			Player p = Bukkit.getPlayer(uniqueId);
 			if (p == null || getTeamPlayer(p) != null) {
 				return;
@@ -1026,21 +1061,17 @@ public class Team {
 
 		// Notify third party plugins that a team message is going to be sent
 		TeamSendMessageEvent teamSendMessageEvent = new TeamSendMessageEvent(this, sender, message, format, prefix, recipients);
-		@SuppressWarnings("deprecation")
-		// Deprecated event for backwards compatibility with older plugins
-		TeamPreMessageEvent deprecatedPreTeamMessageEvent = new TeamPreMessageEvent(this, sender, message, format, prefix, recipients);
 		Bukkit.getPluginManager().callEvent(teamSendMessageEvent);
-		Bukkit.getPluginManager().callEvent(deprecatedPreTeamMessageEvent);
 
 		// Process any updates after the event has been dispatched
-		if (teamSendMessageEvent.isCancelled() || deprecatedPreTeamMessageEvent.isCancelled()) {
+		if (teamSendMessageEvent.isCancelled()) {
 			return;
 		}
 
-		message = getFromEvents(message, teamSendMessageEvent.getRawMessage(), deprecatedPreTeamMessageEvent.getRawMessage(), "Team message cannot be null");
-		format = getFromEvents(format, teamSendMessageEvent.getFormat(), deprecatedPreTeamMessageEvent.getFormat(), "Team message format cannot be null").replace("$name$", "{0}").replace("$message$", "{1}");
-		prefix = getFromEvents(prefix, teamSendMessageEvent.getSenderNamePrefix(), deprecatedPreTeamMessageEvent.getSenderNamePrefix(), "The prefix cannot be null");
-		recipients = getFromEvents(members.getClone(), teamSendMessageEvent.getRecipients(), deprecatedPreTeamMessageEvent.getRecipients(), "Team message recipients cannot be null");
+		message = teamSendMessageEvent.getRawMessage();
+		format = teamSendMessageEvent.getFormat().replace("$name$", "{0}").replace("$message$", "{1}");
+		prefix = teamSendMessageEvent.getSenderNamePrefix();
+		recipients = teamSendMessageEvent.getRecipients();
 
 		Collection<Player> playerRecipients = recipients.stream().map(r -> r.getPlayer().getPlayer())
 				.filter(Objects::nonNull)
@@ -1061,10 +1092,6 @@ public class Team {
 		String fMessage = LegacyTextUtils.serialize(chatMsg.getMessage());
 		// Notify third party plugins that a message has been dispatched
 		Bukkit.getPluginManager().callEvent(new PostTeamSendMessageEvent(this, sender, fMessage, recipients));
-
-		@SuppressWarnings("deprecation")
-		TeamMessageEvent deprecatedTeamMessageEvent = new TeamMessageEvent(this, sender, fMessage, recipients);
-		Bukkit.getPluginManager().callEvent(deprecatedTeamMessageEvent);
 	}
 
 	private static @NotNull ChatColor getPreviousChatColor(String toTest) {

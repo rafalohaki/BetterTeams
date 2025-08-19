@@ -2,7 +2,7 @@ package com.booksaw.betterTeams.integrations.placeholder;
 
 import com.booksaw.betterTeams.Team;
 import com.booksaw.betterTeams.team.TeamManager;
-import org.apache.commons.lang.ArrayUtils;
+import org.apache.commons.lang3.ArrayUtils;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.function.Function;

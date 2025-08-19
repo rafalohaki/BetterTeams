@@ -45,7 +45,10 @@ public class MemberSetComponent extends TeamPlayerSetComponent {
 		Team.getTeamManager().playerJoinTeam(team, teamPlayer);
 		set.add(teamPlayer);
 
-		Bukkit.getPluginManager().callEvent(new PostPlayerJoinTeamEvent(team, teamPlayer));
+		// Call PostPlayerJoinTeamEvent asynchronously as required by the event
+		Bukkit.getScheduler().runTaskAsynchronously(Main.plugin, () -> {
+			Bukkit.getPluginManager().callEvent(new PostPlayerJoinTeamEvent(team, teamPlayer));
+		});
 	}
 
 	@Override

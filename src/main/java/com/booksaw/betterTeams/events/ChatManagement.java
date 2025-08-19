@@ -49,7 +49,10 @@ public class ChatManagement implements Listener {
 		TeamPlayer teamPlayer = team.getTeamPlayer(p);
 
 		if (teamPlayer == null) {
-			throw new IllegalStateException("Player " + p.getName() + " is registered to be in a team, yet has no playerdata associated with that team");
+			// Player is registered in team but playerdata is not yet synchronized
+			// This can happen during team creation or data loading - skip chat processing
+			Main.plugin.getLogger().warning("Player " + p.getName() + " is registered to be in a team, but playerdata is not yet synchronized. Skipping chat processing.");
+			return;
 		}
 
 		String anyChatToGlobalPrefix = Main.plugin.getConfig().getString("chatPrefixes.teamOrAllyToGlobal", "!");
